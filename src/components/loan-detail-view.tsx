@@ -23,13 +23,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -47,7 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
 import { toast } from "@/hooks/use-toast";
-import type { ApprovalStatus, Loan, LoanWrite, LoanSerializable } from "@/lib/types";
+import type { Loan, LoanWrite, LoanSerializable } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { AIRiskAssessment } from "./ai-risk-assessment";
@@ -302,36 +295,6 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                         <Button variant={loan.payrollChecked ? "default" : "outline"} size="icon" onClick={() => handleUpdate({ payrollChecked: !loan.payrollChecked })} disabled={isSubmitting}>
                             {loan.payrollChecked ? <Check /> : <X />}
                         </Button>
-                    </div>
-                </div>
-                <Separator />
-                <div className="space-y-4">
-                    <h4 className="font-medium">Approvals</h4>
-                    <div className="flex items-center justify-between">
-                        <Label>Approver 1</Label>
-                        <Select value={loan.approvals.approver1} onValueChange={(val: ApprovalStatus) => handleUpdate({approvals: {...loan.approvals, approver1: val}})} disabled={isSubmitting}>
-                            <SelectTrigger className="w-[140px]">
-                                <SelectValue placeholder="Set status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="approved">Approved</SelectItem>
-                                <SelectItem value="denied">Denied</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <Label>Approver 2</Label>
-                        <Select value={loan.approvals.approver2} onValueChange={(val: ApprovalStatus) => handleUpdate({approvals: {...loan.approvals, approver2: val}})} disabled={isSubmitting}>
-                            <SelectTrigger className="w-[140px]">
-                                <SelectValue placeholder="Set status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="approved">Approved</SelectItem>
-                                <SelectItem value="denied">Denied</SelectItem>
-                            </SelectContent>
-                        </Select>
                     </div>
                 </div>
             </CardContent>

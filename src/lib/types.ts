@@ -12,10 +12,6 @@ export interface Loan {
   status: LoanStatus;
   bookkeeperChecked: boolean;
   payrollChecked: boolean;
-  approvals: {
-    approver1: ApprovalStatus;
-    approver2: ApprovalStatus;
-  };
   denialRemarks?: string;
   remarks?: string;
   createdAt: Timestamp | Date;

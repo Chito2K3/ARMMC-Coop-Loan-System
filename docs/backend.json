@@ -34,14 +34,6 @@
           "type": "boolean",
           "description": "Indicates if the payroll department has checked the application."
         },
-        "approver1": {
-          "type": "string",
-          "description": "Status of approver 1's approval (e.g., approved, pending)."
-        },
-        "approver2": {
-          "type": "string",
-          "description": "Status of approver 2's approval (e.g., approved, pending)."
-        },
         "denialRemarks": {
           "type": "string",
           "description": "Remarks for denying the loan application."
@@ -64,8 +56,6 @@
         "status",
         "bookkeeperChecked",
         "payrollChecked",
-        "approver1",
-        "approver2",
         "createdAt",
         "updatedAt"
       ]

@@ -113,10 +113,6 @@ export function LoanFormSheet({
           status: "pending" as const,
           bookkeeperChecked: false,
           payrollChecked: false,
-          approvals: {
-            approver1: "pending" as const,
-            approver2: "pending" as const,
-          },
           denialRemarks: "",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
