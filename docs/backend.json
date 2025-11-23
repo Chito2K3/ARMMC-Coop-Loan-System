@@ -191,7 +191,6 @@
           ]
         }
       }
-    ],
-    "reasoning": "Given the application requirements and the 'admin-only' access for this prototype, a simple flat structure for the `loans` collection will suffice. The focus is on simulating the workflow and UI elements. However, even for a prototype, it's crucial to structure the data in a way that's easily adaptable to more complex security requirements later. This design anticipates the addition of role-based access control in the future.\n\nThe structure prioritizes ease of implementation for the initial prototype while adhering to the principles of Authorization Independence and enabling QAPs.\n\n**Authorization Independence:** Since this is an admin-only prototype, authorization independence is not strictly required now. However, the design anticipates future needs. If role-based access (e.g., bookkeeper, payroll, approver) is implemented, relevant authorization data (e.g., user roles or group memberships) would be denormalized into each loan document to avoid `get()` calls in the security rules. For instance, a `roles` map could be added to each loan document, containing which role has what permissions on the loan.\n\n**QAPs (Rules are not Filters):** Currently, with `allow read, write: if true;`, all `list` operations are permitted. However, when role-based access is introduced, segregation will be important to ensure that specific roles can only access particular subsets of loan data. Using the status field we can ensure that only certain status types are available depending on the role. For example, a bookkeeper may only be able to view loan applications that are pending review."
+    ]
   }
 }
