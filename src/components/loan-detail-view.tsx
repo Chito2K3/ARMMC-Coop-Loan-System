@@ -19,6 +19,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -254,21 +255,11 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Loan Details</CardTitle>
-                <CardDescription>
-                  Core information about the application.
-                </CardDescription>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setSheetOpen(true)}
-              >
-                <FilePenLine className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
+            <CardHeader>
+              <CardTitle>Loan Details</CardTitle>
+              <CardDescription>
+                Core information about the application.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <InfoItem
@@ -321,6 +312,25 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 />
               )}
             </CardContent>
+            <CardFooter className="flex justify-between items-center border-t pt-6">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSheetOpen(true)}
+              >
+                <FilePenLine className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  disabled={isSubmitting}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Loan
+                </Button>
+            </CardFooter>
           </Card>
           <AIRiskAssessment loan={loan} />
         </div>
@@ -387,18 +397,6 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                     {loan.payrollChecked ? <Check /> : <X />}
                   </Button>
                 </div>
-              </div>
-              <Separator />
-              <div>
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={() => setDeleteDialogOpen(true)}
-                  disabled={isSubmitting}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Loan
-                </Button>
               </div>
             </CardContent>
           </Card>
