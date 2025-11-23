@@ -41,7 +41,7 @@ export function LoanComputationDialog({
   loan,
 }: LoanComputationDialogProps) {
   const computation = useMemo(() => {
-    if (!loan) return null;
+    if (!loan || !loan.paymentTerm) return null;
 
     const principal = loan.amount;
     const term = loan.paymentTerm;
@@ -158,15 +158,15 @@ export function LoanComputationDialog({
                   {formatCurrency(computation.totalInterest)}
                 </span>
               </div>
-              <div className="flex justify-between text-destructive">
+              <div className="flex justify-between">
                 <span className="font-semibold">Total Deductions</span>
-                <span className="font-semibold">
+                <span className="font-semibold text-destructive">
                   {formatCurrency(computation.totalDeductions)}
                 </span>
               </div>
-               <div className="flex justify-between text-green-600">
+               <div className="flex justify-between">
                 <span className="font-bold text-lg">Net Proceeds</span>
-                <span className="font-bold text-lg">
+                <span className="font-bold text-lg text-green-600">
                   {formatCurrency(computation.netProceeds)}
                 </span>
               </div>
