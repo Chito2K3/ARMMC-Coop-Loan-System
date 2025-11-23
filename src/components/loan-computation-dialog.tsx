@@ -41,13 +41,13 @@ export function LoanComputationDialog({
   loan,
 }: LoanComputationDialogProps) {
   const computation = useMemo(() => {
-    if (!loan || !loan.paymentTerm) return null;
+    if (!loan || !loan.paymentTerm || loan.paymentTerm === 0) return null;
 
     const principal = loan.amount;
     const term = loan.paymentTerm;
     const interestRate = 0.015; // 1.5%
 
-    const monthlyAmortizationPrincipal = Math.round(principal / term);
+    const monthlyAmortization = Math.round(principal / term);
 
     const schedule: {
       month: number;
@@ -63,35 +63,27 @@ export function LoanComputationDialog({
     for (let month = 1; month <= term; month++) {
       const interest = beginningBalance * interestRate;
       totalInterest += interest;
-      const endingBalance = beginningBalance - monthlyAmortizationPrincipal;
+
+      // Determine the principal payment for the current month
+      let principalPayment = monthlyAmortization;
+      if (month === term) {
+        // For the last month, adjust the principal to ensure the balance is exactly zero
+        const totalPrincipalPaidSoFar = monthlyAmortization * (term - 1);
+        principalPayment = principal - totalPrincipalPaidSoFar;
+      }
+      
+      const endingBalance = beginningBalance - principalPayment;
 
       schedule.push({
         month,
         beginningBalance,
         interest,
-        principal: monthlyAmortizationPrincipal,
-        endingBalance: endingBalance < 0 ? 0 : endingBalance,
+        principal: principalPayment,
+        endingBalance: endingBalance < 0.01 ? 0 : endingBalance, // Use a small threshold for floating point issues
       });
 
-      beginningBalance = endingBalance;
+      beginningBalance = endingBalance < 0.01 ? 0 : endingBalance;
     }
-
-    // Adjust last month's principal if rounding caused a mismatch
-    const totalPrincipalPaid = monthlyAmortizationPrincipal * (term - 1);
-    const lastMonthPrincipal = principal - totalPrincipalPaid;
-    
-    if (schedule.length > 0) {
-      schedule[term - 1].principal = lastMonthPrincipal;
-      schedule[term - 1].endingBalance = 0;
-
-      // Recalculate last month interest if principal was adjusted, only if term > 1
-      if (term > 1) {
-        totalInterest -= schedule[term - 1].interest;
-        schedule[term - 1].interest = schedule[term - 2].endingBalance * interestRate;
-        totalInterest += schedule[term - 1].interest;
-      }
-    }
-
 
     const serviceCharge = principal * 0.06;
     const shareCapital = principal * 0.01;
@@ -109,7 +101,7 @@ export function LoanComputationDialog({
     return {
       principal,
       term,
-      monthlyAmortization: monthlyAmortizationPrincipal,
+      monthlyAmortization: monthlyAmortization,
       totalInterest,
       schedule,
       serviceCharge,
