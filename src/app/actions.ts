@@ -85,7 +85,9 @@ export async function createLoan(data: { applicantName: string; amount: number; 
   try {
     const nextLoanNumber = await getNextLoanNumber();
     await addDoc(collection(db, "loans"), {
-      ...data,
+      applicantName: data.applicantName,
+      amount: data.amount,
+      remarks: data.remarks || "",
       No: nextLoanNumber,
       salary: 0,
       status: "pending",
