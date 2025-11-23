@@ -50,6 +50,7 @@ import { StatusBadge } from './status-badge';
 import { LoanFormSheet } from './loan-form-sheet';
 import { ExistingLoansCheck } from './existing-loans-check';
 import { LoanComputationDialog } from './loan-computation-dialog';
+import { CollectionSchedule } from './collection-schedule';
 
 export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
@@ -346,6 +347,10 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 </Button>
             </CardFooter>
           </Card>
+          
+          {loan.status === 'released' && loan.releasedAt && (
+            <CollectionSchedule loan={loan} />
+          )}
         </div>
 
         <div className="space-y-6">
