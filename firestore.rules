@@ -1,0 +1,70 @@
+/**
+ * Core Philosophy: This ruleset establishes a secure baseline for a prototyping phase.
+ * The primary security posture is "Authenticated Access Only," meaning any user who
+ * has successfully signed in is permitted to perform any action (create, read,
+ * update, delete) on any loan document. This is suitable for an early-stage,
+ * "admin-only" development environment where the focus is on functionality rather
+ * than granular, role-based permissions.
+ *
+ * Data Structure: The data is organized in a single, flat top-level collection
+ * named 'loans'. Each document within this collection represents a unique loan
+ * application, identified by a `loanId`.
+ *
+ * Key Security Decisions:
+ * - Default Deny: All access is denied by default. Rules only grant explicit permissions.
+ * - Authentication Required: No anonymous or unauthenticated access is permitted for
+ *   any operation. This provides a fundamental layer of security.
+ * - No Granular Roles: In this prototyping phase, the concept of specific user roles
+ *   (e.g., 'bookkeeper', 'approver') is not enforced. Any signed-in user is
+ *   treated as an administrator with full privileges.
+ * - Flexible Schema: The rules do not enforce the shape or data types of the loan
+ *   documents, allowing for rapid iteration and changes to the data model without
+ *   needing to update security rules.
+ *
+ * Denormalization for Authorization: This principle is not yet applied as there are
+ * no complex authorization requirements. The current rules rely solely on the user's
+ * authentication state. As the application evolves to include roles, authorization
+ * data (like a `members` map) should be denormalized onto each loan document to
+ * enable simple and performant role-based checks.
+ *
+ * Structural Segregation: Not applicable in this simple, single-collection model.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions for Readability and Reusability
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Ensures the user is signed in and the document they are trying to
+     * modify or delete actually exists. Prevents writes to non-existent paths.
+     */
+    function isAuthenticatedAndDocExists() {
+      return isSignedIn() && resource != null;
+    }
+
+
+    /**
+     * @description Allows any authenticated user to perform any action on loan documents.
+     * This is a secure setup for an "admin-only" prototype.
+     * @path /loans/{loanId}
+     * @allow A signed-in user creates a new loan application. (e.g., `(create) auth.uid: 'some_user_id'`)
+     * @deny An anonymous (unauthenticated) user attempts to read a loan. (e.g., `(get) auth: null`)
+     * @principle Enforces a baseline of authentication for all data access, treating all signed-in users as administrators for this prototype.
+     */
+    match /loans/{loanId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAuthenticatedAndDocExists();
+      allow delete: if isAuthenticatedAndDocExists();
+    }
+  }
+}
