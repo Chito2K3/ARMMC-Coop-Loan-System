@@ -112,8 +112,6 @@ export function DashboardClient() {
           >
             <TabsList>
               <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="approved">Approved</TabsTrigger>
               <TabsTrigger value="denied">Denied</TabsTrigger>
               <TabsTrigger value="released">Released</TabsTrigger>
             </TabsList>
