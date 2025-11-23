@@ -68,20 +68,24 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
   const day = baseDate.getDate();
 
   let firstCollectionDay: number;
-  let firstCollectionDate: Date;
-
+  
   if (day <= 15) {
     firstCollectionDay = 15;
-    firstCollectionDate = new Date(year, month, firstCollectionDay);
   } else {
     firstCollectionDay = 30;
-    const tempDate = new Date(year, month, firstCollectionDay);
-    if (tempDate.getMonth() !== month) {
-      firstCollectionDate = new Date(year, month + 1, 0);
-    } else {
-      firstCollectionDate = tempDate;
-    }
   }
+  
+  // Ensure the day does not exceed the number of days in the month
+  const getValidDate = (year: number, month: number, day: number) => {
+    const date = new Date(year, month, day);
+    if (date.getMonth() !== month) {
+      // It rolled over, so get the last day of the correct month
+      return new Date(year, month + 1, 0);
+    }
+    return date;
+  }
+
+  const firstCollectionDate = getValidDate(year, month, firstCollectionDay);
 
   const monthlyPrincipal = loan.amount / loan.paymentTerm;
 
@@ -89,24 +93,12 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
     { length: loan.paymentTerm },
     (_, i) => {
       const dueDate = addMonths(firstCollectionDate, i);
-
-      const targetDate = new Date(
-        dueDate.getFullYear(),
-        dueDate.getMonth(),
-        firstCollectionDay
-      );
-      if (targetDate.getMonth() !== dueDate.getMonth()) {
-        dueDate.setDate(
-          new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate()
-        );
-      } else {
-        dueDate.setDate(firstCollectionDay);
-      }
+      const correctedDueDate = getValidDate(dueDate.getFullYear(), dueDate.getMonth(), firstCollectionDay);
 
       return {
         loanId: loan.id,
         paymentNumber: i + 1,
-        dueDate: Timestamp.fromDate(dueDate),
+        dueDate: Timestamp.fromDate(correctedDueDate),
         amount: monthlyPrincipal,
         status: 'pending',
         penalty: 0,
