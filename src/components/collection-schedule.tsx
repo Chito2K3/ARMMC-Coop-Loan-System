@@ -95,6 +95,25 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
       title: 'Payment Date Updated',
       description: 'The payment has been marked as paid.',
     });
+    
+    // Check if all payments are now paid
+    const allPaid = payments.every(p => {
+      // The current payment is being updated, so its state in `payments` array is old.
+      // We count it as paid for this check.
+      if (p.id === paymentId) return true;
+      // Check the status of all other payments.
+      return p.status === 'paid';
+    });
+
+    if (allPaid) {
+      const loanRef = doc(firestore, 'loans', loan.id);
+      updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
+      toast({
+        title: 'Loan Fully Paid!',
+        description: 'Congratulations! This loan has been fully paid.',
+        className: 'bg-green-100 text-green-800 border-green-200'
+      });
+    }
   };
   
   const handleWaivePenalty = (paymentId: string) => {
@@ -204,6 +223,7 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
                             'w-[200px] justify-start text-left font-normal',
                             !payment.paymentDate && 'text-muted-foreground'
                           )}
+                          disabled={loan.status === 'fully-paid'}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {payment.paymentDate ? (
@@ -239,6 +259,7 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
                         size="sm"
                         onClick={() => handleWaivePenalty(payment.id)}
                         title="Waive Penalty"
+                        disabled={loan.status === 'fully-paid'}
                       >
                        <Undo2 className="h-4 w-4" />
                         <span className="sr-only">Waive Penalty</span>

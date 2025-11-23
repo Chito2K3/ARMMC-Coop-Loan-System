@@ -312,6 +312,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
   };
 
+  const isWorkflowDisabled = ['released', 'fully-paid'].includes(loan.status);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -358,7 +360,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                         handleUpdate({ salary: Number(e.target.value) })
                       }
                       className="h-8 text-right w-32"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || loan.status === 'fully-paid'}
                     />
                   </div>
                 }
@@ -401,6 +403,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 size="sm"
                 variant="outline"
                 onClick={() => setSheetOpen(true)}
+                disabled={loan.status === 'fully-paid'}
               >
                 <FilePenLine className="h-4 w-4 mr-2" />
                 Edit
@@ -417,7 +420,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
             </CardFooter>
           </Card>
 
-          {loan.status === 'released' && loan.releasedAt && (
+          {(loan.status === 'released' || loan.status === 'fully-paid') && loan.releasedAt && (
             <CollectionSchedule loan={loan} />
           )}
         </div>
@@ -438,7 +441,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                   onClick={() => handleUpdate({ status: 'approved' })}
                   disabled={
                     isSubmitting ||
-                    ['approved', 'released'].includes(loan.status)
+                    ['approved', 'released', 'fully-paid'].includes(loan.status)
                   }
                 >
                   <ThumbsUp className="mr-2 h-4 w-4" /> Approve
@@ -446,7 +449,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 <Button
                   variant="destructive"
                   onClick={() => setDenyDialogOpen(true)}
-                  disabled={isSubmitting || loan.status === 'denied'}
+                  disabled={isSubmitting || loan.status === 'denied' || isWorkflowDisabled}
                 >
                   <ThumbsDown className="mr-2 h-4 w-4" /> Deny
                 </Button>
@@ -464,7 +467,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                         bookkeeperChecked: !loan.bookkeeperChecked,
                       })
                     }
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isWorkflowDisabled}
                   >
                     {loan.bookkeeperChecked ? <Check /> : <X />}
                   </Button>
@@ -477,7 +480,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                     onClick={() =>
                       handleUpdate({ payrollChecked: !loan.payrollChecked })
                     }
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isWorkflowDisabled}
                   >
                     {loan.payrollChecked ? <Check /> : <X />}
                   </Button>
@@ -486,7 +489,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
             </CardContent>
           </Card>
 
-          {['approved', 'released'].includes(loan.status) && (
+          {['approved', 'released', 'fully-paid'].includes(loan.status) && (
             <Card>
               <CardHeader>
                 <CardTitle>Loan Actions</CardTitle>

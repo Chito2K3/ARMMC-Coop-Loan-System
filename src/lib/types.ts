@@ -1,6 +1,6 @@
 import type { Timestamp } from 'firebase/firestore';
 
-export type LoanStatus = 'pending' | 'approved' | 'denied' | 'released';
+export type LoanStatus = 'pending' | 'approved' | 'denied' | 'released' | 'fully-paid';
 export type ApprovalStatus = 'pending' | 'approved' | 'denied';
 export type LoanType = 'Cash Advance' | 'Multi-Purpose' | 'Emergency';
 export type LoanPurpose =

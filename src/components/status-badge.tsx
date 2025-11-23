@@ -18,6 +18,8 @@ export function StatusBadge({
       "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800/60 hover:bg-red-100",
     released:
       "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800/60 hover:bg-blue-100",
+    "fully-paid":
+      "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-800/60 hover:bg-purple-100",
   };
 
   return (
@@ -25,7 +27,7 @@ export function StatusBadge({
       variant="outline"
       className={cn("capitalize font-medium", statusClasses[status], className)}
     >
-      {status}
+      {status.replace('-', ' ')}
     </Badge>
   );
 }
