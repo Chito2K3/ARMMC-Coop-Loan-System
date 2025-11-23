@@ -33,24 +33,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions for Readability and Reusability
-
-    /**
-     * Checks if the user is authenticated.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * Ensures the user is signed in and the document they are trying to
-     * modify or delete actually exists. Prevents writes to non-existent paths.
-     */
-    function isAuthenticatedAndDocExists() {
-      return isSignedIn() && resource != null;
-    }
-
-
     /**
      * @description Allows any authenticated user to perform any action on loan documents.
      * This is a secure setup for an "admin-only" prototype.
@@ -60,11 +42,7 @@ service cloud.firestore {
      * @principle Enforces a baseline of authentication for all data access, treating all signed-in users as administrators for this prototype.
      */
     match /loans/{loanId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isAuthenticatedAndDocExists();
-      allow delete: if isAuthenticatedAndDocExists();
+      allow read, write: if request.auth != null;
     }
   }
 }
