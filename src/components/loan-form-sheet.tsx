@@ -178,133 +178,135 @@ export function LoanFormSheet({
               : "Fill out the form to create a new loan application."}
           </SheetDescription>
         </SheetHeader>
-        <Form {...form}>
-          <form
-            id="loan-form"
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="flex-1 flex flex-col min-h-0"
-          >
-            <ScrollArea className="flex-1 -mx-6">
-              <div className="space-y-6 px-6 py-4">
-                <FormField
-                  control={form.control}
-                  name="applicantName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Applicant Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Juan Dela Cruz" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Loan Amount</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="5000" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="loanType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Type of Loan</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+        <div className="flex-1 min-h-0">
+          <Form {...form}>
+            <form
+              id="loan-form"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="h-full flex flex-col"
+            >
+              <ScrollArea className="flex-1 pr-6 -mr-6">
+                <div className="space-y-6 py-4">
+                  <FormField
+                    control={form.control}
+                    name="applicantName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Applicant Name</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a loan type" />
-                          </SelectTrigger>
+                          <Input placeholder="Juan Dela Cruz" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          {loanTypeOptions.map(type => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="purpose"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Purpose</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Loan Amount</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a purpose" />
-                          </Trigger>
+                          <Input type="number" placeholder="5000" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          {loanPurposeOptions.map(purpose => (
-                            <SelectItem key={purpose} value={purpose}>
-                              {purpose}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="paymentTerm"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Term (Months)</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="loanType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Type of Loan</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a loan type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {loanTypeOptions.map(type => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="purpose"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Purpose</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a purpose" />
+                            </Trigger>
+                          </FormControl>
+                          <SelectContent>
+                            {loanPurposeOptions.map(purpose => (
+                              <SelectItem key={purpose} value={purpose}>
+                                {purpose}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="paymentTerm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Term (Months)</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a payment term" />
+                            </Trigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentTermOptions.map(term => (
+                              <SelectItem key={term} value={String(term)}>
+                                {term} month{term > 1 ? 's' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="remarks"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Remarks (Optional)</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a payment term" />
-                          </Trigger>
+                          <Textarea
+                            placeholder="Enter any relevant remarks"
+                            className="resize-none"
+                            {...field}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {paymentTermOptions.map(term => (
-                            <SelectItem key={term} value={String(term)}>
-                              {term} month{term > 1 ? 's' : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="remarks"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Remarks (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter any relevant remarks"
-                          className="resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </ScrollArea>
-          </form>
-        </Form>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </ScrollArea>
+            </form>
+          </Form>
+        </div>
         <SheetFooter>
           <Button
             type="button"
