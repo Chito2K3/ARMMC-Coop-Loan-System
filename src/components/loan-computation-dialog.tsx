@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo } from "react";
@@ -59,17 +60,16 @@ export function LoanComputationDialog({
 
     let beginningBalance = principal;
     let totalInterest = 0;
+    let totalPrincipalPaid = 0;
 
     for (let month = 1; month <= term; month++) {
       const interest = beginningBalance * interestRate;
       totalInterest += interest;
 
-      // Determine the principal payment for the current month
       let principalPayment = monthlyAmortization;
+      // For the last month, adjust the principal to make the balance exactly zero
       if (month === term) {
-        // For the last month, adjust the principal to ensure the balance is exactly zero
-        const totalPrincipalPaidSoFar = monthlyAmortization * (term - 1);
-        principalPayment = principal - totalPrincipalPaidSoFar;
+        principalPayment = principal - totalPrincipalPaid;
       }
       
       const endingBalance = beginningBalance - principalPayment;
@@ -81,7 +81,8 @@ export function LoanComputationDialog({
         principal: principalPayment,
         endingBalance: endingBalance < 0.01 ? 0 : endingBalance, // Use a small threshold for floating point issues
       });
-
+      
+      totalPrincipalPaid += principalPayment;
       beginningBalance = endingBalance < 0.01 ? 0 : endingBalance;
     }
 
@@ -237,3 +238,5 @@ export function LoanComputationDialog({
     </Dialog>
   );
 }
+
+    
