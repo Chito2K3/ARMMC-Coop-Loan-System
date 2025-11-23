@@ -315,8 +315,8 @@ export function LoanFormSheet({
           >
             Cancel
           </Button>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             form="loan-form"
             disabled={form.formState.isSubmitting}
           >
