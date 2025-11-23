@@ -5,7 +5,6 @@ export type ApprovalStatus = 'pending' | 'approved' | 'denied';
 
 export interface Loan {
   id: string;
-  No: number;
   applicantName: string;
   amount: number;
   salary: number;
@@ -27,4 +26,4 @@ export type LoanSerializable = Omit<Loan, 'createdAt' | 'updatedAt'> & {
 };
 
 // This is the shape of the data when we create or update a loan document
-export type LoanWrite = Omit<Loan, 'id' | 'createdAt' | 'updatedAt' | 'No'>;
+export type LoanWrite = Omit<Loan, 'id' | 'createdAt' | 'updatedAt'>;

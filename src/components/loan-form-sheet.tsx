@@ -39,7 +39,6 @@ import {
   collection,
   doc,
   serverTimestamp,
-  getCountFromServer,
 } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -114,13 +113,8 @@ export function LoanFormSheet({
           description: "The loan application is being updated.",
         });
       } else {
-        const loansCollection = collection(firestore, "loans");
-        const snapshot = await getCountFromServer(loansCollection);
-        const nextLoanNumber = snapshot.data().count + 1;
-
         const newLoan = {
           ...data,
-          No: nextLoanNumber,
           salary: 0,
           status: "pending" as const,
           bookkeeperChecked: false,

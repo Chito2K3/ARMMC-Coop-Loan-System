@@ -5,7 +5,6 @@ import {
   Check,
   ChevronLeft,
   FilePenLine,
-  Loader2,
   ThumbsDown,
   ThumbsUp,
   X,
@@ -44,6 +43,7 @@ import type { Loan, LoanWrite, LoanSerializable } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { AIRiskAssessment } from "./ai-risk-assessment";
+import { ExistingLoansCheck } from "./existing-loans-check";
 
 export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
@@ -203,7 +203,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
         </Button>
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            Loan #{loan.No}
+            Loan #{loan.id.slice(-6)}
           </h1>
           <p className="text-muted-foreground">
             Applicant: {loan.applicantName}
@@ -274,6 +274,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               <CardDescription>Manage the loan's journey.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+                <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
                 <div className="flex flex-wrap gap-2">
                     <Button onClick={() => handleUpdate({ status: "approved" })} disabled={isSubmitting || loan.status === 'approved'}>
                         <ThumbsUp className="mr-2 h-4 w-4" /> Approve
@@ -334,7 +335,6 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeny} disabled={!denialRemarks || isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm Denial
             </AlertDialogAction>
           </AlertDialogFooter>
