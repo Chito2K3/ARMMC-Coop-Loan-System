@@ -62,73 +62,25 @@ import { CollectionSchedule } from './collection-schedule';
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
 
-  const releaseDate = new Date(releasedAt);
-
-  // Ensure the day does not exceed the number of days in the month
   const getValidDate = (year: number, month: number, day: number) => {
-    const date = new Date(year, month, day);
-    if (date.getMonth() !== month) {
-      // If the day is invalid (e.g., 30th of Feb), go to the last day of that month.
-      return new Date(year, month + 1, 0);
-    }
-    return date;
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    const validDay = Math.min(day, lastDayOfMonth);
+    return new Date(year, month, validDay);
   };
   
   let firstCollectionDate: Date;
 
   if (loan.paymentTerm === 1) {
-    // For 1-month loans, the due date is exactly 1 month from release.
-    firstCollectionDate = addMonths(releaseDate, 1);
+    firstCollectionDate = addMonths(releasedAt, 1);
   } else {
-    // For multi-month loans, find the next 15th or 30th.
-    const firstPaymentMonth = addMonths(releaseDate, 1);
-    const year = firstPaymentMonth.getFullYear();
-    const month = firstPaymentMonth.getMonth();
-    
-    let collectionDay: number;
-    // If release day is on or before the 15th, first payment is on the 30th of the release month.
-    // But since we are already in the next month, we look at the original release day.
-    if (releaseDate.getDate() <= 15) {
-      collectionDay = 30;
+    const releaseDay = releasedAt.getDate();
+    if (releaseDay <= 15) {
+      // First payment on the 30th of the release month
+      firstCollectionDate = getValidDate(releasedAt.getFullYear(), releasedAt.getMonth(), 30);
     } else {
-      // If release day is after the 15th, first payment is on the 15th of the month after next.
-      collectionDay = 15;
-    }
-
-    // Special case for release after 15th: the first payment is on the 15th of the month following the next month.
-    if (releaseDate.getDate() > 15) {
-       const targetMonth = addMonths(releaseDate, 1);
-       firstCollectionDate = getValidDate(targetMonth.getFullYear(), targetMonth.getMonth(), 15);
-    } else {
-       const targetMonth = addMonths(releaseDate, 0); // Same month as release
-       firstCollectionDate = getValidDate(targetMonth.getFullYear(), targetMonth.getMonth(), 30);
-    }
-
-    // Logic to set the first collection date to the next 15th or 30th
-    const nextMonthDate = addMonths(releaseDate, 1);
-    let firstCollectionDay: number;
-    if (releaseDate.getDate() <= 15) {
-      firstCollectionDay = 30; // 30th of the next month
-       firstCollectionDate = getValidDate(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), firstCollectionDay);
-    } else {
-      firstCollectionDay = 15; // 15th of the month after next
-       firstCollectionDate = getValidDate(addMonths(releaseDate, 2).getFullYear(), addMonths(releaseDate, 2).getMonth(), firstCollectionDay);
-       
-       // Let's correct the logic again. If release is after 15th, first payment should be on 15th of next month
-       if (releaseDate.getDate() > 15) {
-         firstCollectionDate = getValidDate(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), 15);
-       } else {
-         // if release is on or before 15, first payment is 30th of the same month of release
-         // this logic seems complex. Let's simplify.
-         // First payment is 1 month after release. Then find nearest 15th or 30th.
-         
-         const baseDate = addMonths(releaseDate, 1);
-         let day = 15;
-         if(baseDate.getDate() > 15) {
-            day = 30;
-         }
-         firstCollectionDate = getValidDate(baseDate.getFullYear(), baseDate.getMonth(), day);
-       }
+      // First payment on the 15th of the next month
+      const nextMonth = addMonths(releasedAt, 1);
+      firstCollectionDate = getValidDate(nextMonth.getFullYear(), nextMonth.getMonth(), 15);
     }
   }
 
