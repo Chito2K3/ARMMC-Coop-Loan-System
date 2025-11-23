@@ -9,7 +9,7 @@ import { Skeleton } from "./ui/skeleton";
 
 interface ExistingLoansCheckProps {
   applicantName: string;
-  currentLoanId?: string; // Made optional
+  currentLoanId?: string;
 }
 
 export function ExistingLoansCheck({
@@ -18,8 +18,8 @@ export function ExistingLoansCheck({
 }: ExistingLoansCheckProps) {
   const firestore = useFirestore();
 
-  // The query should only run if we have a currentLoanId to exclude
-  const shouldQuery = !!(firestore && applicantName && currentLoanId);
+  // The query should run if we have an applicant name.
+  const shouldQuery = !!(firestore && applicantName);
 
   const existingLoansQuery = useMemoFirebase(() => {
     if (!shouldQuery) return null;
@@ -32,13 +32,16 @@ export function ExistingLoansCheck({
 
   const { data: loans, isLoading } = useCollection<Loan>(existingLoansQuery);
 
-  // Filter out the current loan from the results
-  const existingLoans = loans?.filter(loan => loan.id !== currentLoanId);
+  // Filter out the current loan from the results if a currentLoanId is provided
+  const existingLoans = useMemoFirebase(
+    () => loans?.filter((loan) => loan.id !== currentLoanId),
+    [loans, currentLoanId]
+  );
 
   if (!shouldQuery) {
     return null;
   }
-  
+
   if (isLoading) {
     return <Skeleton className="h-10 w-full" />;
   }
