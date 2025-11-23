@@ -61,7 +61,7 @@ export function AIRiskAssessment({ loan }: { loan: Loan }) {
           <span>AI-Powered Risk Assessment</span>
         </CardTitle>
         <CardDescription>
-          Generate an estimated risk score and potential concerns.
+          Uses Google AI to generate an estimated risk score and highlight potential concerns based on the applicant's financial details.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

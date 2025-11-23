@@ -163,8 +163,8 @@ export function DashboardClient() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/loan/${loan.id}`}>View Details</Link>
+                          <DropdownMenuItem>
+                            <Link href={`/loan/${loan.id}`} className="w-full h-full">View Details</Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
