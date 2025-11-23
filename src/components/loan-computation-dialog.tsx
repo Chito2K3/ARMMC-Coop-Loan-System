@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo } from "react";
@@ -42,13 +41,11 @@ export function LoanComputationDialog({
   loan,
 }: LoanComputationDialogProps) {
   const computation = useMemo(() => {
-    if (!loan || !loan.paymentTerm || loan.paymentTerm === 0) return null;
+    if (!loan || !loan.paymentTerm || loan.paymentTerm <= 0) return null;
 
     const principal = loan.amount;
     const term = loan.paymentTerm;
-    const interestRate = 0.015; // 1.5%
-
-    const monthlyAmortization = Math.round(principal / term);
+    const interestRate = 0.015; // 1.5% diminishing
 
     const schedule: {
       month: number;
@@ -58,39 +55,40 @@ export function LoanComputationDialog({
       endingBalance: number;
     }[] = [];
 
+    const monthlyPrincipalPayment = principal / term;
     let beginningBalance = principal;
     let totalInterest = 0;
-    let totalPrincipalPaid = 0;
-
+    
     for (let month = 1; month <= term; month++) {
       const interest = beginningBalance * interestRate;
       totalInterest += interest;
 
-      let principalPayment = monthlyAmortization;
-      // For the last month, adjust the principal to make the balance exactly zero
-      if (month === term) {
-        principalPayment = principal - totalPrincipalPaid;
-      }
-      
+      const principalPayment = (month === term) 
+        ? beginningBalance // Pay off remaining balance on the last month
+        : monthlyPrincipalPayment;
+
       const endingBalance = beginningBalance - principalPayment;
 
       schedule.push({
         month,
-        beginningBalance,
-        interest,
-        principal: principalPayment,
-        endingBalance: endingBalance < 0.01 ? 0 : endingBalance, // Use a small threshold for floating point issues
+        beginningBalance: parseFloat(beginningBalance.toFixed(2)),
+        interest: parseFloat(interest.toFixed(2)),
+        principal: parseFloat(principalPayment.toFixed(2)),
+        endingBalance: parseFloat(endingBalance.toFixed(2)),
       });
-      
-      totalPrincipalPaid += principalPayment;
-      beginningBalance = endingBalance < 0.01 ? 0 : endingBalance;
+
+      beginningBalance = endingBalance;
     }
 
+    // Fixed fees
     const serviceCharge = principal * 0.06;
     const shareCapital = principal * 0.01;
-    const firstMonthAmortization = schedule.length > 0 ? schedule[0].principal : 0;
-    const firstMonthInterest = schedule.length > 0 ? schedule[0].interest : 0;
 
+    // First month deductions
+    const firstMonthAmortization = monthlyPrincipalPayment;
+    const firstMonthInterest = principal * interestRate;
+    
+    // Total deductions
     const totalDeductions =
       serviceCharge +
       shareCapital +
@@ -102,7 +100,7 @@ export function LoanComputationDialog({
     return {
       principal,
       term,
-      monthlyAmortization: monthlyAmortization,
+      monthlyAmortization: monthlyPrincipalPayment,
       totalInterest,
       schedule,
       serviceCharge,
@@ -133,66 +131,75 @@ export function LoanComputationDialog({
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Principal Amount</span>
-                <span className="font-medium">{formatCurrency(computation.principal)}</span>
+                <span className="font-medium">
+                  {formatCurrency(computation.principal)}
+                </span>
               </div>
+
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Payment Term</span>
                 <span className="font-medium">{computation.term} months</span>
               </div>
+
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Monthly Amortization (Principal)</span>
                 <span className="font-medium">
                   {formatCurrency(computation.monthlyAmortization)}
                 </span>
               </div>
+
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Diminishing Interest</span>
                 <span className="font-medium">
                   {formatCurrency(computation.totalInterest)}
                 </span>
               </div>
+
               <div className="flex justify-between">
                 <span className="font-semibold">Total Deductions</span>
                 <span className="font-semibold text-destructive">
                   {formatCurrency(computation.totalDeductions)}
                 </span>
               </div>
-               <div className="flex justify-between">
+
+              <div className="flex justify-between">
                 <span className="font-bold text-lg">Net Proceeds</span>
                 <span className="font-bold text-lg text-green-600">
                   {formatCurrency(computation.netProceeds)}
                 </span>
               </div>
             </div>
-            
+
             <h3 className="font-semibold text-lg pt-4">First Month Deductions</h3>
-             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
-               <div className="flex justify-between">
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Service Charge (6%)</span>
                 <span className="font-medium">
                   {formatCurrency(computation.serviceCharge)}
                 </span>
               </div>
-               <div className="flex justify-between">
+
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Share Capital (1%)</span>
                 <span className="font-medium">
                   {formatCurrency(computation.shareCapital)}
                 </span>
               </div>
-               <div className="flex justify-between">
+
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">First Month Amortization</span>
                 <span className="font-medium">
                   {formatCurrency(computation.firstMonthAmortization)}
                 </span>
               </div>
-                <div className="flex justify-between">
+
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">First Month Interest</span>
                 <span className="font-medium">
                   {formatCurrency(computation.firstMonthInterest)}
                 </span>
               </div>
-             </div>
-
+            </div>
           </div>
 
           {/* Amortization Schedule */}
@@ -238,5 +245,3 @@ export function LoanComputationDialog({
     </Dialog>
   );
 }
-
-    
