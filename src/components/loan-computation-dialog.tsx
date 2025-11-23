@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Loan } from '@/lib/types';
 import { Loader2, CheckCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface LoanComputationDialogProps {
   open: boolean;
@@ -45,6 +46,8 @@ export function LoanComputationDialog({
   onRelease,
   isSubmitting,
 }: LoanComputationDialogProps) {
+  const router = useRouter();
+  
   const computation = useMemo(() => {
     if (!loan || !loan.paymentTerm || loan.paymentTerm <= 0 || !loan.amount)
       return null;
@@ -91,8 +94,9 @@ export function LoanComputationDialog({
     }
 
 
-    // Fixed fees
-    const serviceCharge = principal * 0.06;
+    // Fees calculation
+    const loanTermInYears = term / 12;
+    const serviceCharge = principal * 0.06 * loanTermInYears; // 6% PER YEAR
     const shareCapital = principal * 0.01;
 
     // First month deductions
@@ -120,6 +124,7 @@ export function LoanComputationDialog({
       firstMonthInterest,
       totalDeductions,
       netProceeds,
+      loanTermInYears,
     };
   }, [loan]);
 
@@ -128,6 +133,7 @@ export function LoanComputationDialog({
   const handleRelease = async () => {
     await onRelease();
     onOpenChange(false);
+    router.push('/');
   };
 
 
@@ -195,9 +201,9 @@ export function LoanComputationDialog({
               First Month Deductions
             </h3>
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
-              <div className="flex justify-between">
+               <div className="flex justify-between">
                 <span className="text-muted-foreground">
-                  Service Charge (6%)
+                  Service Charge (6% per year)
                 </span>
                 <span className="font-medium">
                   {formatCurrency(computation.serviceCharge)}
@@ -265,7 +271,7 @@ export function LoanComputationDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter className="gap-2 sm:justify-between flex-row">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
