@@ -270,7 +270,7 @@ export function LoanFormSheet({
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select a payment term" />
-                            </Trigger>
+                            </Trigger>                          
                           </FormControl>
                           <SelectContent>
                             {paymentTermOptions.map(term => (
