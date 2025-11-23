@@ -67,7 +67,7 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
   const paymentSchedule: PaymentWrite[] = Array.from(
     { length: loan.paymentTerm },
     (_, i) => {
-      // Simplified Logic: Due date is the same day as release day, but in the future months.
+      // New simplified logic: due date is the same day of the month as release day, but in future months.
       const dueDate = addMonths(releasedAt, i + 1);
 
       return {
@@ -148,40 +148,41 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
   };
 
   const handleRelease = async () => {
-    if (!firestore || !loan) return;
+    if (!firestore || !loan || !loanRef) return;
     setIsSubmitting(true);
     try {
       const releasedAtDate = new Date();
       const batch = writeBatch(firestore);
   
       // 1. Update the loan status and releasedAt timestamp
-      batch.update(loanRef!, {
+      batch.update(loanRef, {
         status: 'released',
         releasedAt: Timestamp.fromDate(releasedAtDate),
         updatedAt: serverTimestamp(),
       });
   
-      // 2. Generate and add payment schedule documents
+      // 2. Generate and add payment schedule documents to the batch
       const paymentSchedule = generatePaymentSchedule(loan, releasedAtDate);
       paymentSchedule.forEach((payment) => {
         const paymentRef = doc(collection(firestore, 'loans', loanId, 'payments'));
         batch.set(paymentRef, payment);
       });
   
-      // 3. Commit the batch
+      // 3. Commit the batch to save all changes at once
       await batch.commit();
   
       toast({
         title: 'Loan Released',
         description: 'The funds have been released and the collection schedule is generated.',
       });
-      // After release, you might want to close the computation dialog
-      setComputationDialogOpen(false);
+      
+      setComputationDialogOpen(false); // Close the dialog on success
     } catch (error) {
+      console.error("Error releasing loan: ", error); // Add console log for debugging
       toast({
         variant: 'destructive',
         title: 'Release Failed',
-        description: (error as Error).message,
+        description: (error as Error).message || "An unknown error occurred.",
       });
     } finally {
       setIsSubmitting(false);
