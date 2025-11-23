@@ -4,7 +4,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Save } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
+import {
+  collection,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -32,18 +39,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useFirestore } from "@/firebase";
 import {
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
 } from "@/firebase/non-blocking-updates";
 import type { LoanSerializable, LoanType, LoanPurpose } from "@/lib/types";
-import {
-  collection,
-  doc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { useFirestore } from "@/firebase";
-import { useRouter } from "next/navigation";
 
 const paymentTermOptions = [1, 3, 4, 6, 9, 12, 18, 24];
 const loanTypeOptions: LoanType[] = ["Cash Advance", "Multi-Purpose", "Emergency"];
@@ -66,8 +67,12 @@ const loanFormSchema = z.object({
   paymentTerm: z.coerce.number().refine((val) => paymentTermOptions.includes(val), {
     message: "Please select a valid payment term.",
   }),
-  loanType: z.enum(loanTypeOptions),
-  purpose: z.enum(loanPurposeOptions),
+  loanType: z.enum(loanTypeOptions, {
+    errorMap: () => ({ message: "Please select a valid loan type." }),
+  }),
+  purpose: z.enum(loanPurposeOptions, {
+    errorMap: () => ({ message: "Please select a valid purpose." }),
+  }),
   remarks: z.string().optional(),
 });
 
@@ -87,6 +92,7 @@ export function LoanFormSheet({
   const isEditMode = !!loan;
   const firestore = useFirestore();
   const router = useRouter();
+  const { toast } = useToast();
 
   const form = useForm<LoanFormValues>({
     resolver: zodResolver(loanFormSchema),
@@ -222,7 +228,7 @@ export function LoanFormSheet({
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select a loan type" />
-                            </Trigger>
+                            </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {loanTypeOptions.map(type => (
@@ -270,7 +276,7 @@ export function LoanFormSheet({
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select a payment term" />
-                            </Trigger>                          
+                            </Trigger>
                           </FormControl>
                           <SelectContent>
                             {paymentTermOptions.map(term => (
