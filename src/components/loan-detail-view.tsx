@@ -47,7 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
 import { toast } from "@/hooks/use-toast";
-import type { ApprovalStatus, Loan, LoanWrite } from "@/lib/types";
+import type { ApprovalStatus, Loan, LoanWrite, LoanSerializable } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { AIRiskAssessment } from "./ai-risk-assessment";
@@ -196,6 +196,12 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     )
   }
 
+  const loanSerializable: LoanSerializable = {
+    ...loan,
+    createdAt: loan.createdAt.toISOString(),
+    updatedAt: loan.updatedAt.toISOString(),
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -336,7 +342,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       <LoanFormSheet
         open={isSheetOpen}
         onOpenChange={setSheetOpen}
-        loan={loan}
+        loan={loanSerializable}
       />
       <AlertDialog open={isDenyDialogOpen} onOpenChange={setDenyDialogOpen}>
         <AlertDialogContent>

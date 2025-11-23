@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useFlow } from "@genkit-ai/next/client";
 import { Wand2, Loader2, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,10 +12,10 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { LoanSerializable } from "@/lib/types";
-import { assessLoanRisk, AssessLoanRiskInput, AssessLoanRiskOutput } from "@/ai/ai-risk-assessment";
+import type { Loan } from "@/lib/types";
+import { assessLoanRisk, AssessLoanRiskOutput } from "@/ai/ai-risk-assessment";
 
-export function AIRiskAssessment({ loan }: { loan: LoanSerializable }) {
+export function AIRiskAssessment({ loan }: { loan: Loan }) {
   const [assessment, setAssessment] = useState<AssessLoanRiskOutput | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
