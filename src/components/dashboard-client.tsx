@@ -26,13 +26,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Loan, LoanStatus } from "@/lib/types";
+import type { Loan } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { format } from "date-fns";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy, Timestamp } from "firebase/firestore";
+import { collection, query, orderBy, Timestamp } from "firebase/firestore";
 import { Skeleton } from "./ui/skeleton";
 
 // Helper function to convert Firestore Timestamps in a loan object
@@ -50,19 +49,13 @@ const convertLoanTimestamps = (loan: Loan) => {
 
 export function DashboardClient() {
   const firestore = useFirestore();
-  const [statusFilter, setStatusFilter] = React.useState<"all" | LoanStatus>(
-    "all"
-  );
   const [isCreateSheetOpen, setCreateSheetOpen] = React.useState(false);
 
   const loansQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     const baseQuery = collection(firestore, 'loans');
-    if (statusFilter !== 'all') {
-      return query(baseQuery, where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
-    }
     return query(baseQuery, orderBy('createdAt', 'desc'));
-  }, [firestore, statusFilter]);
+  }, [firestore]);
 
   const { data: rawLoans, isLoading } = useCollection<Loan>(loansQuery);
 
@@ -103,19 +96,6 @@ export function DashboardClient() {
           <CardDescription>
             A list of all recent loan applications.
           </CardDescription>
-          <Tabs
-            defaultValue="all"
-            onValueChange={(value) =>
-              setStatusFilter(value as "all" | LoanStatus)
-            }
-            className="pt-4"
-          >
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="denied">Denied</TabsTrigger>
-              <TabsTrigger value="released">Released</TabsTrigger>
-            </TabsList>
-          </Tabs>
         </CardHeader>
         <CardContent>
           <Table>
@@ -198,7 +178,7 @@ export function DashboardClient() {
                       colSpan={5}
                       className="h-24 text-center text-muted-foreground"
                     >
-                      No loans found for the selected status.
+                      No loans found.
                     </TableCell>
                   </TableRow>
                 )
