@@ -9,7 +9,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { addDays, differenceInDays, format } from 'date-fns';
+import { differenceInDays, format } from 'date-fns';
 import { Calendar as CalendarIcon, Undo2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -171,11 +171,14 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
             </TableHeader>
             <TableBody>
               {isLoading && (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    <Skeleton className="h-8 w-full" />
-                  </TableCell>
-                </TableRow>
+                <>
+                  <TableRow>
+                    <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
+                  </TableRow>
+                </>
               )}
               {!isLoading && payments.length === 0 && (
                  <TableRow>
