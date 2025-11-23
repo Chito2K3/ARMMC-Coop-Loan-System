@@ -4,12 +4,12 @@ import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import type { Loan } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, Loader2 } from "lucide-react";
+import { Info } from "lucide-react";
 import { Skeleton } from "./ui/skeleton";
 
 interface ExistingLoansCheckProps {
   applicantName: string;
-  currentLoanId: string;
+  currentLoanId?: string; // Made optional
 }
 
 export function ExistingLoansCheck({
@@ -18,19 +18,27 @@ export function ExistingLoansCheck({
 }: ExistingLoansCheckProps) {
   const firestore = useFirestore();
 
+  // The query should only run if we have a currentLoanId to exclude
+  const shouldQuery = !!(firestore && applicantName && currentLoanId);
+
   const existingLoansQuery = useMemoFirebase(() => {
-    if (!firestore || !applicantName || !currentLoanId) return null;
+    if (!shouldQuery) return null;
     return query(
       collection(firestore, "loans"),
       where("applicantName", "==", applicantName),
       where("status", "in", ["approved", "released"])
     );
-  }, [firestore, applicantName, currentLoanId]);
+  }, [firestore, applicantName, shouldQuery]);
 
   const { data: loans, isLoading } = useCollection<Loan>(existingLoansQuery);
 
+  // Filter out the current loan from the results
   const existingLoans = loans?.filter(loan => loan.id !== currentLoanId);
 
+  if (!shouldQuery) {
+    return null;
+  }
+  
   if (isLoading) {
     return <Skeleton className="h-10 w-full" />;
   }
