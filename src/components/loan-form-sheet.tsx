@@ -309,29 +309,29 @@ export function LoanFormSheet({
                   />
                 </div>
               </ScrollArea>
+              {/* This is the change */}
+              <SheetFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={form.formState.isSubmitting}
+                >
+                  {form.formState.isSubmitting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  <span>{isEditMode ? "Save Changes" : "Create Loan"}</span>
+                </Button>
+              </SheetFooter>
             </form>
         </Form>
-        <SheetFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="loan-form"
-            disabled={form.formState.isSubmitting}
-          >
-            {form.formState.isSubmitting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            <span>{isEditMode ? "Save Changes" : "Create Loan"}</span>
-          </Button>
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
