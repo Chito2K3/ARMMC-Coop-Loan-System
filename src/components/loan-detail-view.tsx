@@ -116,6 +116,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       status: 'released',
       releasedAt: serverTimestamp() as any,
     });
+    router.push('/');
   };
 
   const handleDeny = async () => {
