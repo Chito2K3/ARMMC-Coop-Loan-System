@@ -12,8 +12,14 @@ import {
   Calculator,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
-import { doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { addMonths, format } from 'date-fns';
+import {
+  doc,
+  serverTimestamp,
+  Timestamp,
+  collection,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -42,15 +48,75 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   updateDocumentNonBlocking,
   deleteDocumentNonBlocking,
+  addDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { toast } from '@/hooks/use-toast';
-import type { Loan, LoanWrite, LoanSerializable } from '@/lib/types';
+import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
 import { StatusBadge } from './status-badge';
 import { LoanFormSheet } from './loan-form-sheet';
 import { ExistingLoansCheck } from './existing-loans-check';
 import { LoanComputationDialog } from './loan-computation-dialog';
 import { CollectionSchedule } from './collection-schedule';
+
+const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
+  if (!releasedAt || loan.paymentTerm <= 0) return [];
+
+  const baseDate = addMonths(new Date(releasedAt), 1);
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const day = baseDate.getDate();
+
+  let firstCollectionDay: number;
+  let firstCollectionDate: Date;
+
+  if (day <= 15) {
+    firstCollectionDay = 15;
+    firstCollectionDate = new Date(year, month, firstCollectionDay);
+  } else {
+    firstCollectionDay = 30;
+    const tempDate = new Date(year, month, firstCollectionDay);
+    if (tempDate.getMonth() !== month) {
+      firstCollectionDate = new Date(year, month + 1, 0);
+    } else {
+      firstCollectionDate = tempDate;
+    }
+  }
+
+  const monthlyPrincipal = loan.amount / loan.paymentTerm;
+
+  const paymentSchedule: PaymentWrite[] = Array.from(
+    { length: loan.paymentTerm },
+    (_, i) => {
+      const dueDate = addMonths(firstCollectionDate, i);
+
+      const targetDate = new Date(
+        dueDate.getFullYear(),
+        dueDate.getMonth(),
+        firstCollectionDay
+      );
+      if (targetDate.getMonth() !== dueDate.getMonth()) {
+        dueDate.setDate(
+          new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate()
+        );
+      } else {
+        dueDate.setDate(firstCollectionDay);
+      }
+
+      return {
+        loanId: loan.id,
+        paymentNumber: i + 1,
+        dueDate: Timestamp.fromDate(dueDate),
+        amount: monthlyPrincipal,
+        status: 'pending',
+        penalty: 0,
+        penaltyWaived: false,
+      };
+    }
+  );
+
+  return paymentSchedule;
+};
 
 export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
@@ -82,20 +148,21 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
   const [isSheetOpen, setSheetOpen] = React.useState(false);
   const [isDenyDialogOpen, setDenyDialogOpen] = React.useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
-  const [isComputationDialogOpen, setComputationDialogOpen] = React.useState(false);
+  const [isComputationDialogOpen, setComputationDialogOpen] =
+    React.useState(false);
   const [denialRemarks, setDenialRemarks] = React.useState('');
 
   const handleUpdate = async (data: Partial<LoanWrite>) => {
     if (!loanRef) return;
     setIsSubmitting(true);
     try {
-      await new Promise(resolve => {
-         updateDocumentNonBlocking(loanRef, {
-           ...data,
-           updatedAt: serverTimestamp(),
-         });
-         resolve(true)
-      })
+      await new Promise((resolve) => {
+        updateDocumentNonBlocking(loanRef, {
+          ...data,
+          updatedAt: serverTimestamp(),
+        });
+        resolve(true);
+      });
 
       toast({
         title: 'Update In Progress',
@@ -111,13 +178,45 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       setIsSubmitting(false);
     }
   };
-  
+
   const handleRelease = async () => {
-    await handleUpdate({
-      status: 'released',
-      releasedAt: serverTimestamp() as any,
-    });
-    router.push('/');
+    if (!firestore || !loan) return;
+    setIsSubmitting(true);
+    try {
+      const releasedAtDate = new Date();
+      const batch = writeBatch(firestore);
+  
+      // 1. Update the loan status and releasedAt timestamp
+      batch.update(loanRef!, {
+        status: 'released',
+        releasedAt: Timestamp.fromDate(releasedAtDate),
+        updatedAt: serverTimestamp(),
+      });
+  
+      // 2. Generate and add payment schedule documents
+      const paymentSchedule = generatePaymentSchedule(loan, releasedAtDate);
+      paymentSchedule.forEach((payment) => {
+        const paymentRef = doc(collection(firestore, 'loans', loanId, 'payments'));
+        batch.set(paymentRef, payment);
+      });
+  
+      // 3. Commit the batch
+      await batch.commit();
+  
+      toast({
+        title: 'Loan Released',
+        description: 'The funds have been released and the collection schedule is generated.',
+      });
+      router.push('/');
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Release Failed',
+        description: (error as Error).message,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeny = async () => {
@@ -309,7 +408,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 label="Last Updated"
                 value={format(loan.updatedAt, 'PPpp')}
               />
-               {loan.releasedAt && (
+              {loan.releasedAt && (
                 <InfoItem
                   label="Released On"
                   value={format(loan.releasedAt, 'PPpp')}
@@ -337,17 +436,17 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 Edit
               </Button>
               <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setDeleteDialogOpen(true)}
-                  disabled={isSubmitting}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Loan
-                </Button>
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                disabled={isSubmitting}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Loan
+              </Button>
             </CardFooter>
           </Card>
-          
+
           {loan.status === 'released' && loan.releasedAt && (
             <CollectionSchedule loan={loan} />
           )}
@@ -367,7 +466,10 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => handleUpdate({ status: 'approved' })}
-                  disabled={isSubmitting || ['approved', 'released'].includes(loan.status)}
+                  disabled={
+                    isSubmitting ||
+                    ['approved', 'released'].includes(loan.status)
+                  }
                 >
                   <ThumbsUp className="mr-2 h-4 w-4" /> Approve
                 </Button>
@@ -388,7 +490,9 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                     variant={loan.bookkeeperChecked ? 'default' : 'outline'}
                     size="icon"
                     onClick={() =>
-                      handleUpdate({ bookkeeperChecked: !loan.bookkeeperChecked })
+                      handleUpdate({
+                        bookkeeperChecked: !loan.bookkeeperChecked,
+                      })
                     }
                     disabled={isSubmitting}
                   >
@@ -411,21 +515,23 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               </div>
             </CardContent>
           </Card>
-          
+
           {['approved', 'released'].includes(loan.status) && (
             <Card>
               <CardHeader>
                 <CardTitle>Loan Actions</CardTitle>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" onClick={() => setComputationDialogOpen(true)}>
+                <Button
+                  className="w-full"
+                  onClick={() => setComputationDialogOpen(true)}
+                >
                   <Calculator className="mr-2 h-4 w-4" />
                   View Computation
                 </Button>
               </CardContent>
             </Card>
           )}
-
         </div>
       </div>
 
@@ -439,8 +545,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Deny Loan Application</AlertDialogTitle>
             <AlertDialogDescription>
-              Please provide remarks for denying this loan. This will be
-              visible to the team.
+              Please provide remarks for denying this loan. This will be visible
+              to the team.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="grid gap-4 py-4">
