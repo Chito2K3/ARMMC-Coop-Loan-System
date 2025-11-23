@@ -262,6 +262,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <InfoItem label="Loan Type" value={loan.loanType} />
+              <InfoItem label="Purpose" value={loan.purpose} />
               <InfoItem
                 label="Amount"
                 value={new Intl.NumberFormat('en-US', {

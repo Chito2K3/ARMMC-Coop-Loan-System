@@ -26,6 +26,23 @@
           "type": "number",
           "description": "The loan repayment period in months."
         },
+        "loanType": {
+          "type": "string",
+          "description": "The type of loan applied for.",
+          "enum": ["Cash Advance", "Multi-Purpose", "Emergency"]
+        },
+        "purpose": {
+          "type": "string",
+          "description": "The purpose of the loan.",
+          "enum": [
+            "Business Capital",
+            "Bills Payment",
+            "Tuition Fee",
+            "House Renovation",
+            "Medical Expenses",
+            "Travel Expenses"
+          ]
+        },
         "status": {
           "type": "string",
           "description": "The status of the loan application (e.g., pending, approved, denied, released)."
@@ -58,6 +75,8 @@
         "applicantName",
         "amount",
         "paymentTerm",
+        "loanType",
+        "purpose",
         "status",
         "bookkeeperChecked",
         "payrollChecked",

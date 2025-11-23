@@ -2,6 +2,14 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type LoanStatus = 'pending' | 'approved' | 'denied' | 'released';
 export type ApprovalStatus = 'pending' | 'approved' | 'denied';
+export type LoanType = 'Cash Advance' | 'Multi-Purpose' | 'Emergency';
+export type LoanPurpose =
+  | 'Business Capital'
+  | 'Bills Payment'
+  | 'Tuition Fee'
+  | 'House Renovation'
+  | 'Medical Expenses'
+  | 'Travel Expenses';
 
 export interface Loan {
   id: string;
@@ -10,6 +18,8 @@ export interface Loan {
   salary: number;
   paymentTerm: number; // in months
   status: LoanStatus;
+  loanType: LoanType;
+  purpose: LoanPurpose;
   bookkeeperChecked: boolean;
   payrollChecked: boolean;
   denialRemarks?: string;

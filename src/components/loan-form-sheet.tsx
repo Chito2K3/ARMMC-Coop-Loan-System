@@ -34,7 +34,7 @@ import {
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
 } from "@/firebase/non-blocking-updates";
-import type { LoanSerializable } from "@/lib/types";
+import type { LoanSerializable, LoanType, LoanPurpose } from "@/lib/types";
 import {
   collection,
   doc,
@@ -44,6 +44,15 @@ import { useFirestore } from "@/firebase";
 import { useRouter } from "next/navigation";
 
 const paymentTermOptions = [1, 3, 4, 6, 9, 12, 18, 24];
+const loanTypeOptions: LoanType[] = ["Cash Advance", "Multi-Purpose", "Emergency"];
+const loanPurposeOptions: LoanPurpose[] = [
+  "Business Capital",
+  "Bills Payment",
+  "Tuition Fee",
+  "House Renovation",
+  "Medical Expenses",
+  "Travel Expenses",
+];
 
 const loanFormSchema = z.object({
   applicantName: z.string().min(2, {
@@ -55,6 +64,8 @@ const loanFormSchema = z.object({
   paymentTerm: z.coerce.number().refine(val => paymentTermOptions.includes(val), {
     message: "Please select a valid payment term.",
   }),
+  loanType: z.enum(loanTypeOptions),
+  purpose: z.enum(loanPurposeOptions),
   remarks: z.string().optional(),
 });
 
@@ -82,12 +93,16 @@ export function LoanFormSheet({
           applicantName: loan.applicantName,
           amount: loan.amount,
           paymentTerm: loan.paymentTerm,
+          loanType: loan.loanType,
+          purpose: loan.purpose,
           remarks: loan.remarks || "",
         }
       : {
           applicantName: "",
           amount: 0,
           paymentTerm: 6,
+          loanType: "Cash Advance",
+          purpose: "Bills Payment",
           remarks: "",
         },
   });
@@ -185,6 +200,54 @@ export function LoanFormSheet({
                   <FormControl>
                     <Input type="number" placeholder="5000" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="loanType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type of Loan</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a loan type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {loanTypeOptions.map(type => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="purpose"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Purpose</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a purpose" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {loanPurposeOptions.map(purpose => (
+                        <SelectItem key={purpose} value={purpose}>
+                          {purpose}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
