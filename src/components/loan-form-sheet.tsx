@@ -63,7 +63,7 @@ const loanFormSchema = z.object({
   }),
   amount: z.coerce
     .number({ invalid_type_error: "Please enter a valid number." })
-    .positive({ message: "Loan amount must be positive." }),
+    .positive("Loan amount must be positive."),
   paymentTerm: z.coerce.number().refine((val) => paymentTermOptions.includes(val), {
     message: "Please select a valid payment term.",
   }),
@@ -228,7 +228,7 @@ export function LoanFormSheet({
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select a loan type" />
-                            </SelectTrigger>
+                            </Trigger>
                           </FormControl>
                           <SelectContent>
                             {loanTypeOptions.map(type => (
