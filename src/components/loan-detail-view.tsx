@@ -19,6 +19,7 @@ import {
   Timestamp,
   collection,
   writeBatch,
+  Firestore,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   updateDocumentNonBlocking,
   deleteDocumentNonBlocking,
-  addDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { toast } from '@/hooks/use-toast';
@@ -62,30 +62,40 @@ import { CollectionSchedule } from './collection-schedule';
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
 
-  const baseDate = addMonths(new Date(releasedAt), 1);
+  let baseDate: Date;
+
+  // For 1-month loans, the due date is exactly 1 month from release.
+  if (loan.paymentTerm === 1) {
+    baseDate = addMonths(new Date(releasedAt), 1);
+  } else {
+    baseDate = new Date(releasedAt);
+  }
+
   const year = baseDate.getFullYear();
   const month = baseDate.getMonth();
   const day = baseDate.getDate();
 
   let firstCollectionDay: number;
-  
+
   if (day <= 15) {
     firstCollectionDay = 15;
   } else {
     firstCollectionDay = 30;
   }
-  
+
   // Ensure the day does not exceed the number of days in the month
   const getValidDate = (year: number, month: number, day: number) => {
     const date = new Date(year, month, day);
     if (date.getMonth() !== month) {
-      // It rolled over, so get the last day of the correct month
       return new Date(year, month + 1, 0);
     }
     return date;
-  }
-
-  const firstCollectionDate = getValidDate(year, month, firstCollectionDay);
+  };
+  
+  // If payment term is > 1 month, the first payment is 1 month after release, on the 15th/30th
+  const firstCollectionDate = loan.paymentTerm === 1 
+      ? baseDate 
+      : getValidDate(year, month + 1, firstCollectionDay);
 
   const monthlyPrincipal = loan.amount / loan.paymentTerm;
 
@@ -93,7 +103,7 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
     { length: loan.paymentTerm },
     (_, i) => {
       const dueDate = addMonths(firstCollectionDate, i);
-      const correctedDueDate = getValidDate(dueDate.getFullYear(), dueDate.getMonth(), firstCollectionDay);
+       const correctedDueDate = loan.paymentTerm === 1 ? dueDate : getValidDate(dueDate.getFullYear(), dueDate.getMonth(), firstCollectionDay);
 
       return {
         loanId: loan.id,
@@ -109,6 +119,7 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
 
   return paymentSchedule;
 };
+
 
 export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
@@ -199,7 +210,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
         title: 'Loan Released',
         description: 'The funds have been released and the collection schedule is generated.',
       });
-      router.push('/');
+      // After release, you might want to close the computation dialog
+      setComputationDialogOpen(false);
     } catch (error) {
       toast({
         variant: 'destructive',
