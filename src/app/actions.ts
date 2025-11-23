@@ -77,13 +77,8 @@ export async function getLoanById(id: string): Promise<LoanSerializable | null> 
 
 async function getNextLoanNumber(): Promise<number> {
     const coll = collection(db, 'loans');
-    const q = query(coll, orderBy("No", "desc"), limit(1));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-        return 1;
-    }
-    const lastLoan = snapshot.docs[0].data() as Loan;
-    return (lastLoan.No || 0) + 1;
+    const snapshot = await getCountFromServer(coll);
+    return snapshot.data().count + 1;
 }
 
 export async function createLoan(data: { applicantName: string; amount: number; remarks?: string }) {
