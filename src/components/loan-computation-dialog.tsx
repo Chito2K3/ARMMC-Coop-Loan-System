@@ -79,18 +79,24 @@ export function LoanComputationDialog({
     // Adjust last month's principal if rounding caused a mismatch
     const totalPrincipalPaid = monthlyAmortizationPrincipal * (term - 1);
     const lastMonthPrincipal = principal - totalPrincipalPaid;
-    schedule[term - 1].principal = lastMonthPrincipal;
-    schedule[term - 1].endingBalance = 0;
     
-    // Recalculate last month interest if principal was adjusted
-    totalInterest -= schedule[term - 1].interest;
-    schedule[term - 1].interest = schedule[term - 2].endingBalance * interestRate;
-    totalInterest += schedule[term - 1].interest;
+    if (schedule.length > 0) {
+      schedule[term - 1].principal = lastMonthPrincipal;
+      schedule[term - 1].endingBalance = 0;
+
+      // Recalculate last month interest if principal was adjusted, only if term > 1
+      if (term > 1) {
+        totalInterest -= schedule[term - 1].interest;
+        schedule[term - 1].interest = schedule[term - 2].endingBalance * interestRate;
+        totalInterest += schedule[term - 1].interest;
+      }
+    }
+
 
     const serviceCharge = principal * 0.06;
     const shareCapital = principal * 0.01;
-    const firstMonthAmortization = schedule[0].principal;
-    const firstMonthInterest = schedule[0].interest;
+    const firstMonthAmortization = schedule.length > 0 ? schedule[0].principal : 0;
+    const firstMonthInterest = schedule.length > 0 ? schedule[0].interest : 0;
 
     const totalDeductions =
       serviceCharge +
