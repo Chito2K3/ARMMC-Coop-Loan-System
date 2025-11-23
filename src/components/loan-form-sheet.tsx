@@ -178,12 +178,11 @@ export function LoanFormSheet({
               : "Fill out the form to create a new loan application."}
           </SheetDescription>
         </SheetHeader>
-        <div className="flex-1 min-h-0">
-          <Form {...form}>
+        <Form {...form}>
             <form
               id="loan-form"
               onSubmit={form.handleSubmit(onSubmit)}
-              className="h-full flex flex-col"
+              className="flex-1 flex flex-col min-h-0"
             >
               <ScrollArea className="flex-1 pr-6 -mr-6">
                 <div className="space-y-6 py-4">
@@ -305,8 +304,7 @@ export function LoanFormSheet({
                 </div>
               </ScrollArea>
             </form>
-          </Form>
-        </div>
+        </Form>
         <SheetFooter>
           <Button
             type="button"
