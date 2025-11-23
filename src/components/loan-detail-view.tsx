@@ -62,43 +62,14 @@ import { CollectionSchedule } from './collection-schedule';
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
 
-  const getValidDate = (year: number, month: number, day: number) => {
-    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-    const validDay = Math.min(day, lastDayOfMonth);
-    return new Date(year, month, validDay);
-  };
-  
-  let firstCollectionDate: Date;
-
-  if (loan.paymentTerm === 1) {
-    firstCollectionDate = addMonths(releasedAt, 1);
-  } else {
-    const releaseDay = releasedAt.getDate();
-    if (releaseDay <= 15) {
-      // First payment on the 30th of the release month
-      firstCollectionDate = getValidDate(releasedAt.getFullYear(), releasedAt.getMonth(), 30);
-    } else {
-      // First payment on the 15th of the next month
-      const nextMonth = addMonths(releasedAt, 1);
-      firstCollectionDate = getValidDate(nextMonth.getFullYear(), nextMonth.getMonth(), 15);
-    }
-  }
-
-
   const monthlyPrincipal = loan.amount / loan.paymentTerm;
 
   const paymentSchedule: PaymentWrite[] = Array.from(
     { length: loan.paymentTerm },
     (_, i) => {
-      let dueDate;
-      if (loan.paymentTerm === 1) {
-        dueDate = firstCollectionDate;
-      } else {
-         const currentMonth = addMonths(firstCollectionDate, i);
-         const day = firstCollectionDate.getDate(); // 15 or 30
-         dueDate = getValidDate(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-      }
-      
+      // Simplified Logic: Due date is the same day as release day, but in the future months.
+      const dueDate = addMonths(releasedAt, i + 1);
+
       return {
         loanId: loan.id,
         paymentNumber: i + 1,
