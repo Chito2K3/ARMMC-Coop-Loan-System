@@ -77,7 +77,8 @@ export function LoanComputationDialog({
 
       // On the last month, adjust the principal payment to ensure the balance is exactly 0
       if (month === term) {
-        principalPayment = beginningBalance;
+        const totalPrincipalPaid = monthlyAmortizationPrincipal * (term - 1);
+        principalPayment = principal - totalPrincipalPaid;
       }
       
       const endingBalance = beginningBalance - principalPayment;
@@ -87,7 +88,7 @@ export function LoanComputationDialog({
         beginningBalance: beginningBalance,
         interest: interest,
         principal: principalPayment,
-        endingBalance: endingBalance,
+        endingBalance: endingBalance < 0 ? 0 : endingBalance, // Prevent negative balance display
       });
 
       beginningBalance = endingBalance;
@@ -96,11 +97,11 @@ export function LoanComputationDialog({
 
     // Fees calculation
     const loanTermInYears = term / 12;
-    const serviceCharge = principal * 0.06 * loanTermInYears; // 6% PER YEAR
+    const serviceCharge = principal * 0.06 * loanTermInYears; 
     const shareCapital = principal * 0.01;
 
     // First month deductions
-    const firstMonthAmortization = monthlyAmortizationPrincipal;
+    const firstMonthAmortization = term === 1 ? 0 : monthlyAmortizationPrincipal;
     const firstMonthInterest = principal * interestRate;
 
     // Total deductions
@@ -133,7 +134,6 @@ export function LoanComputationDialog({
   const handleRelease = async () => {
     await onRelease();
     onOpenChange(false);
-    router.push('/');
   };
 
 
@@ -216,15 +216,17 @@ export function LoanComputationDialog({
                   {formatCurrency(computation.shareCapital)}
                 </span>
               </div>
-
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  First Month Amortization
-                </span>
-                <span className="font-medium">
-                  {formatCurrency(computation.firstMonthAmortization)}
-                </span>
-              </div>
+              
+              {computation.term > 1 && (
+                 <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    First Month Amortization
+                  </span>
+                  <span className="font-medium">
+                    {formatCurrency(computation.firstMonthAmortization)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
@@ -271,7 +273,7 @@ export function LoanComputationDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between flex-row">
+        <DialogFooter className="gap-2 sm:justify-between flex-row-reverse sm:flex-row">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
