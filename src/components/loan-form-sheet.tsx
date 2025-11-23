@@ -10,6 +10,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -30,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
@@ -165,8 +167,8 @@ export function LoanFormSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg">
-        <SheetHeader className="mb-4">
+      <SheetContent className="sm:max-w-lg flex flex-col">
+        <SheetHeader>
           <SheetTitle>
             {isEditMode ? "Edit Loan" : "New Loan Application"}
           </SheetTitle>
@@ -176,142 +178,151 @@ export function LoanFormSheet({
               : "Fill out the form to create a new loan application."}
           </SheetDescription>
         </SheetHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="applicantName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Applicant Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Juan Dela Cruz" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        <ScrollArea className="flex-1 -mx-6">
+          <div className="px-6">
+            <Form {...form}>
+              <form id="loan-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="applicantName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Applicant Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Juan Dela Cruz" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Loan Amount</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="5000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="loanType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Type of Loan</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a loan type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {loanTypeOptions.map(type => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="purpose"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Purpose</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a purpose" />
+                            </Trigger>
+                          </FormControl>
+                          <SelectContent>
+                            {loanPurposeOptions.map(purpose => (
+                              <SelectItem key={purpose} value={purpose}>
+                                {purpose}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="paymentTerm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Term (Months)</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a payment term" />
+                            </Trigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentTermOptions.map(term => (
+                              <SelectItem key={term} value={String(term)}>
+                                {term} month{term > 1 ? 's' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="remarks"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Remarks (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter any relevant remarks"
+                            className="resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+              </form>
+            </Form>
+          </div>
+        </ScrollArea>
+        <SheetFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              form="loan-form"
+              onClick={form.handleSubmit(onSubmit)} 
+              disabled={form.formState.isSubmitting}
+            >
+              {form.formState.isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
               )}
-            />
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Loan Amount</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="5000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="loanType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Type of Loan</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a loan type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {loanTypeOptions.map(type => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="purpose"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Purpose</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a purpose" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {loanPurposeOptions.map(purpose => (
-                        <SelectItem key={purpose} value={purpose}>
-                          {purpose}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="paymentTerm"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment Term (Months)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={String(field.value)}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a payment term" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {paymentTermOptions.map(term => (
-                        <SelectItem key={term} value={String(term)}>
-                          {term} month{term > 1 ? 's' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="remarks"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Remarks (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter any relevant remarks"
-                      className="resize-none"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                <span>{isEditMode ? "Save Changes" : "Create Loan"}</span>
-              </Button>
-            </div>
-          </form>
-        </Form>
+              <span>{isEditMode ? "Save Changes" : "Create Loan"}</span>
+            </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
