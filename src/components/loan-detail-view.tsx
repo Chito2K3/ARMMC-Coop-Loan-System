@@ -47,7 +47,6 @@ import { toast } from '@/hooks/use-toast';
 import type { Loan, LoanWrite, LoanSerializable } from '@/lib/types';
 import { StatusBadge } from './status-badge';
 import { LoanFormSheet } from './loan-form-sheet';
-import { AIRiskAssessment } from './ai-risk-assessment';
 import { ExistingLoansCheck } from './existing-loans-check';
 
 export function LoanDetailView({ loanId }: { loanId: string }) {
@@ -334,7 +333,6 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 </Button>
             </CardFooter>
           </Card>
-          <AIRiskAssessment loan={loan} />
         </div>
 
         <div className="space-y-6">
