@@ -26,13 +26,15 @@ export interface Loan {
   remarks?: string;
   createdAt: Timestamp | Date;
   updatedAt: Timestamp | Date;
+  releasedAt?: Timestamp | Date;
 }
 
 // This type is for data coming from Firestore that needs to be serialized
 // for Next.js server components or client components.
-export type LoanSerializable = Omit<Loan, 'createdAt' | 'updatedAt'> & {
+export type LoanSerializable = Omit<Loan, 'createdAt' | 'updatedAt' | 'releasedAt'> & {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  releasedAt?: string; // ISO string
 };
 
 // This is the shape of the data when we create or update a loan document

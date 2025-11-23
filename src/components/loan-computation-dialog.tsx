@@ -20,11 +20,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Loan } from '@/lib/types';
+import { Loader2, CheckCircle } from 'lucide-react';
 
 interface LoanComputationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loan: Loan;
+  onRelease: () => Promise<void>;
+  isSubmitting: boolean;
 }
 
 const formatCurrency = (value: number) => {
@@ -39,6 +42,8 @@ export function LoanComputationDialog({
   open,
   onOpenChange,
   loan,
+  onRelease,
+  isSubmitting,
 }: LoanComputationDialogProps) {
   const computation = useMemo(() => {
     if (!loan || !loan.paymentTerm || loan.paymentTerm <= 0 || !loan.amount)
@@ -119,6 +124,12 @@ export function LoanComputationDialog({
   }, [loan]);
 
   if (!computation) return null;
+  
+  const handleRelease = async () => {
+    await onRelease();
+    onOpenChange(false);
+  };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -254,10 +265,23 @@ export function LoanComputationDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
+          {loan.status === 'approved' && (
+            <Button
+              onClick={handleRelease}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="mr-2 h-4 w-4" />
+              )}
+              Release Fund
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

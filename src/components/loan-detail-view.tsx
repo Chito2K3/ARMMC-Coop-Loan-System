@@ -64,25 +64,16 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
 
   const loan = React.useMemo(() => {
     if (!rawLoan) return null;
-    const createdAtDate =
-      rawLoan.createdAt && (rawLoan.createdAt as any).seconds
-        ? new Timestamp(
-            (rawLoan.createdAt as any).seconds,
-            (rawLoan.createdAt as any).nanoseconds
-          ).toDate()
-        : new Date();
-    const updatedAtDate =
-      rawLoan.updatedAt && (rawLoan.updatedAt as any).seconds
-        ? new Timestamp(
-            (rawLoan.updatedAt as any).seconds,
-            (rawLoan.updatedAt as any).nanoseconds
-          ).toDate()
-        : new Date();
+    const toDate = (ts: any) =>
+      ts && ts.seconds
+        ? new Timestamp(ts.seconds, ts.nanoseconds).toDate()
+        : null;
 
     return {
       ...rawLoan,
-      createdAt: createdAtDate,
-      updatedAt: updatedAtDate,
+      createdAt: toDate(rawLoan.createdAt) || new Date(),
+      updatedAt: toDate(rawLoan.updatedAt) || new Date(),
+      releasedAt: toDate(rawLoan.releasedAt),
     };
   }, [rawLoan]);
 
@@ -97,10 +88,14 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     if (!loanRef) return;
     setIsSubmitting(true);
     try {
-      updateDocumentNonBlocking(loanRef, {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
+      await new Promise(resolve => {
+         updateDocumentNonBlocking(loanRef, {
+           ...data,
+           updatedAt: serverTimestamp(),
+         });
+         resolve(true)
+      })
+
       toast({
         title: 'Update In Progress',
         description: 'The loan application is being updated.',
@@ -114,6 +109,13 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     } finally {
       setIsSubmitting(false);
     }
+  };
+  
+  const handleRelease = async () => {
+    await handleUpdate({
+      status: 'released',
+      releasedAt: serverTimestamp() as any,
+    });
   };
 
   const handleDeny = async () => {
@@ -236,6 +238,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     ...loan,
     createdAt: loan.createdAt.toISOString(),
     updatedAt: loan.updatedAt.toISOString(),
+    releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
   };
 
   return (
@@ -304,6 +307,12 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 label="Last Updated"
                 value={format(loan.updatedAt, 'PPpp')}
               />
+               {loan.releasedAt && (
+                <InfoItem
+                  label="Released On"
+                  value={format(loan.releasedAt, 'PPpp')}
+                />
+              )}
               {loan.remarks && <InfoItem label="Remarks" value={loan.remarks} />}
               {loan.status === 'denied' && loan.denialRemarks && (
                 <InfoItem
@@ -352,7 +361,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => handleUpdate({ status: 'approved' })}
-                  disabled={isSubmitting || loan.status === 'approved'}
+                  disabled={isSubmitting || ['approved', 'released'].includes(loan.status)}
                 >
                   <ThumbsUp className="mr-2 h-4 w-4" /> Approve
                 </Button>
@@ -362,13 +371,6 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                   disabled={isSubmitting || loan.status === 'denied'}
                 >
                   <ThumbsDown className="mr-2 h-4 w-4" /> Deny
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => handleUpdate({ status: 'released' })}
-                  disabled={isSubmitting || loan.status !== 'approved'}
-                >
-                  Mark as Released
                 </Button>
               </div>
               <Separator />
@@ -404,7 +406,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
             </CardContent>
           </Card>
           
-          {loan.status === 'approved' && (
+          {['approved', 'released'].includes(loan.status) && (
             <Card>
               <CardHeader>
                 <CardTitle>Loan Actions</CardTitle>
@@ -412,7 +414,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               <CardContent>
                 <Button className="w-full" onClick={() => setComputationDialogOpen(true)}>
                   <Calculator className="mr-2 h-4 w-4" />
-                  Compute Loan
+                  View Computation
                 </Button>
               </CardContent>
             </Card>
@@ -487,6 +489,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           open={isComputationDialogOpen}
           onOpenChange={setComputationDialogOpen}
           loan={loan}
+          onRelease={handleRelease}
+          isSubmitting={isSubmitting}
         />
       )}
     </div>
