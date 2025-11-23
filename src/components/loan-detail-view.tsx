@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { doc, serverTimestamp } from "firebase/firestore";
+import { doc, serverTimestamp, Timestamp } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
 import { toast } from "@/hooks/use-toast";
-import type { ApprovalStatus, LoanSerializable, LoanWrite } from "@/lib/types";
+import type { ApprovalStatus, Loan, LoanWrite } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { AIRiskAssessment } from "./ai-risk-assessment";
@@ -61,7 +61,23 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     [firestore, loanId]
   );
   
-  const { data: loan, isLoading } = useDoc<LoanSerializable>(loanRef);
+  const { data: rawLoan, isLoading } = useDoc<Loan>(loanRef);
+
+  const loan = React.useMemo(() => {
+    if (!rawLoan) return null;
+    const createdAtDate = rawLoan.createdAt && (rawLoan.createdAt as any).seconds 
+      ? new Timestamp((rawLoan.createdAt as any).seconds, (rawLoan.createdAt as any).nanoseconds).toDate()
+      : new Date();
+    const updatedAtDate = rawLoan.updatedAt && (rawLoan.updatedAt as any).seconds
+      ? new Timestamp((rawLoan.updatedAt as any).seconds, (rawLoan.updatedAt as any).nanoseconds).toDate()
+      : new Date();
+
+    return {
+      ...rawLoan,
+      createdAt: createdAtDate,
+      updatedAt: updatedAtDate,
+    };
+  }, [rawLoan]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
@@ -233,11 +249,11 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               <InfoItem label="Status" value={<StatusBadge status={loan.status} />} />
               <InfoItem
                 label="Created"
-                value={format(new Date(loan.createdAt), "PP")}
+                value={format(loan.createdAt, "PP")}
               />
               <InfoItem
                 label="Last Updated"
-                value={format(new Date(loan.updatedAt), "PPpp")}
+                value={format(loan.updatedAt, "PPpp")}
               />
               {loan.remarks && <InfoItem label="Remarks" value={loan.remarks} />}
               {loan.status === 'denied' && loan.denialRemarks && (

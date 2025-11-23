@@ -27,13 +27,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { LoanSerializable, LoanStatus } from "@/lib/types";
+import type { Loan, LoanStatus } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { format } from "date-fns";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where, orderBy, Timestamp } from "firebase/firestore";
 import { Skeleton } from "./ui/skeleton";
+
+// Helper function to convert Firestore Timestamps in a loan object
+const convertLoanTimestamps = (loan: Loan) => {
+  return {
+    ...loan,
+    createdAt: (loan.createdAt as unknown as Timestamp)?.toDate
+      ? (loan.createdAt as unknown as Timestamp).toDate()
+      : new Date(),
+    updatedAt: (loan.updatedAt as unknown as Timestamp)?.toDate
+      ? (loan.updatedAt as unknown as Timestamp).toDate()
+      : new Date(),
+  };
+};
 
 export function DashboardClient() {
   const firestore = useFirestore();
@@ -51,7 +64,23 @@ export function DashboardClient() {
     return query(baseQuery, orderBy('createdAt', 'desc'));
   }, [firestore, statusFilter]);
 
-  const { data: loans, isLoading } = useCollection<LoanSerializable>(loansQuery);
+  const { data: rawLoans, isLoading } = useCollection<Loan>(loansQuery);
+
+  const loans = React.useMemo(() => {
+    if (!rawLoans) return [];
+    // The data from Firestore might not have the methods on the Timestamps
+    // when it's first coming through, so we need to handle that.
+    return rawLoans.map(loan => {
+      const createdAtDate = loan.createdAt && (loan.createdAt as any).seconds 
+        ? new Timestamp((loan.createdAt as any).seconds, (loan.createdAt as any).nanoseconds).toDate()
+        : new Date();
+      return {
+        ...loan,
+        createdAt: createdAtDate,
+      };
+    });
+  }, [rawLoans]);
+  
 
   return (
     <>
@@ -144,7 +173,7 @@ export function DashboardClient() {
                       }).format(loan.amount)}
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-right">
-                      {format(new Date(loan.createdAt), "PPpp")}
+                      {format(loan.createdAt, "PPpp")}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>

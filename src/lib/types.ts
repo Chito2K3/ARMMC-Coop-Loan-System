@@ -18,8 +18,8 @@ export interface Loan {
   };
   denialRemarks?: string;
   remarks?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
 }
 
 // This type is for data coming from Firestore that needs to be serialized

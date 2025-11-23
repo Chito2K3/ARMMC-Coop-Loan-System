@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useFlow } from "@genkit-ai/next/client";
 import { Wand2, Loader2, AlertTriangle, ShieldCheck } from "lucide-react";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,38 +14,33 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { LoanSerializable } from "@/lib/types";
-
-// NOTE: The `loanRiskAssessor` flow is assumed to exist in `/src/ai/flows/`
-// as per the project instructions.
-
-const inputSchema = z.object({
-  applicantName: z.string(),
-  loanAmount: z.number(),
-  salary: z.number(),
-});
-
-const outputSchema = z.object({
-  riskScore: z.number(),
-  assessment: z.string(),
-  concerns: z.array(z.string()),
-});
+import { assessLoanRisk, AssessLoanRiskInput, AssessLoanRiskOutput } from "@/ai/ai-risk-assessment";
 
 export function AIRiskAssessment({ loan }: { loan: LoanSerializable }) {
-  const [run, { data, loading, error }] = useFlow<
-    z.infer<typeof inputSchema>,
-    z.infer<typeof outputSchema>
-  >("loanRiskAssessor");
+  const [assessment, setAssessment] = useState<AssessLoanRiskOutput | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  const handleAssess = () => {
+
+  const handleAssess = async () => {
     if (loan.salary <= 0) {
       alert("Please set the applicant's salary before assessing risk.");
       return;
     }
-    run({
-      applicantName: loan.applicantName,
-      loanAmount: loan.amount,
-      salary: loan.salary,
-    });
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await assessLoanRisk({
+        applicantName: loan.applicantName,
+        amount: loan.amount,
+        salary: loan.salary,
+      });
+      setAssessment(result);
+    } catch (e) {
+      setError(e as Error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getRiskColor = (score: number) => {
@@ -94,30 +88,25 @@ export function AIRiskAssessment({ loan }: { loan: LoanSerializable }) {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Assessment Failed</AlertTitle>
             <AlertDescription>
-              The AI model failed to generate a risk assessment. Please try again.
+              {error.message || "The AI model failed to generate a risk assessment. Please try again."}
             </AlertDescription>
           </Alert>
         )}
 
-        {data && (
+        {assessment && (
           <Alert>
-            {getRiskIcon(data.riskScore)}
+            {getRiskIcon(assessment.riskScore)}
             <AlertTitle className="flex items-center gap-2">
               Risk Score: 
-              <span className={`font-bold ${getRiskColor(data.riskScore)}`}>
-                {data.riskScore}/100
+              <span className={`font-bold ${getRiskColor(assessment.riskScore)}`}>
+                {assessment.riskScore}/100
               </span>
             </AlertTitle>
             <AlertDescription className="space-y-2 mt-2">
-              <p className="font-medium">{data.assessment}</p>
-              {data.concerns.length > 0 && (
+              {assessment.concerns && (
                 <div>
                   <h4 className="font-semibold text-foreground">Potential Concerns:</h4>
-                  <ul className="list-disc pl-5 space-y-1 mt-1">
-                    {data.concerns.map((concern, index) => (
-                      <li key={index}>{concern}</li>
-                    ))}
-                  </ul>
+                  <p>{assessment.concerns}</p>
                 </div>
               )}
             </AlertDescription>
