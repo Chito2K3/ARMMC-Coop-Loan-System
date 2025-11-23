@@ -9,6 +9,7 @@ import {
   ThumbsUp,
   Trash2,
   X,
+  Calculator,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -48,6 +49,7 @@ import type { Loan, LoanWrite, LoanSerializable } from '@/lib/types';
 import { StatusBadge } from './status-badge';
 import { LoanFormSheet } from './loan-form-sheet';
 import { ExistingLoansCheck } from './existing-loans-check';
+import { LoanComputationDialog } from './loan-computation-dialog';
 
 export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
@@ -88,6 +90,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
   const [isSheetOpen, setSheetOpen] = React.useState(false);
   const [isDenyDialogOpen, setDenyDialogOpen] = React.useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [isComputationDialogOpen, setComputationDialogOpen] = React.useState(false);
   const [denialRemarks, setDenialRemarks] = React.useState('');
 
   const handleUpdate = async (data: Partial<LoanWrite>) => {
@@ -400,6 +403,21 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               </div>
             </CardContent>
           </Card>
+          
+          {loan.status === 'approved' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Loan Actions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" onClick={() => setComputationDialogOpen(true)}>
+                  <Calculator className="mr-2 h-4 w-4" />
+                  Compute Loan
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
         </div>
       </div>
 
@@ -463,6 +481,14 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {loan && (
+        <LoanComputationDialog
+          open={isComputationDialogOpen}
+          onOpenChange={setComputationDialogOpen}
+          loan={loan}
+        />
+      )}
     </div>
   );
 }
