@@ -22,6 +22,10 @@
           "type": "number",
           "description": "The applicant's salary."
         },
+        "paymentTerm": {
+          "type": "number",
+          "description": "The loan repayment period in months."
+        },
         "status": {
           "type": "string",
           "description": "The status of the loan application (e.g., pending, approved, denied, released)."
@@ -53,6 +57,7 @@
         "id",
         "applicantName",
         "amount",
+        "paymentTerm",
         "status",
         "bookkeeperChecked",
         "payrollChecked",

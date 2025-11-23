@@ -9,6 +9,7 @@ export interface Loan {
   applicantName: string;
   amount: number;
   salary: number;
+  paymentTerm: number; // in months
   status: LoanStatus;
   bookkeeperChecked: boolean;
   payrollChecked: boolean;

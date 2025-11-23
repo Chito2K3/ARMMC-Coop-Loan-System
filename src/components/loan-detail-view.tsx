@@ -245,6 +245,10 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                     />
                   </div>
               } />
+               <InfoItem
+                label="Payment Term"
+                value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''}`}
+              />
               <InfoItem label="Status" value={<StatusBadge status={loan.status} />} />
               <InfoItem
                 label="Created"

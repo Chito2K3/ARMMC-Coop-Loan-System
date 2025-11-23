@@ -24,6 +24,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
 } from "@/firebase/non-blocking-updates";
@@ -37,6 +44,8 @@ import {
 import { useFirestore } from "@/firebase";
 import { useRouter } from "next/navigation";
 
+const paymentTermOptions = [1, 3, 4, 6, 9, 12, 18, 24];
+
 const loanFormSchema = z.object({
   applicantName: z.string().min(2, {
     message: "Applicant name must be at least 2 characters.",
@@ -44,6 +53,9 @@ const loanFormSchema = z.object({
   amount: z.coerce
     .number({ invalid_type_error: "Please enter a valid number." })
     .positive({ message: "Loan amount must be positive." }),
+  paymentTerm: z.coerce.number().refine(val => paymentTermOptions.includes(val), {
+    message: "Please select a valid payment term.",
+  }),
   remarks: z.string().optional(),
 });
 
@@ -70,11 +82,13 @@ export function LoanFormSheet({
       ? {
           applicantName: loan.applicantName,
           amount: loan.amount,
+          paymentTerm: loan.paymentTerm,
           remarks: loan.remarks || "",
         }
       : {
           applicantName: "",
           amount: 0,
+          paymentTerm: 6,
           remarks: "",
         },
   });
@@ -92,9 +106,7 @@ export function LoanFormSheet({
       if (isEditMode && loan) {
         const loanRef = doc(firestore, "loans", loan.id);
         updateDocumentNonBlocking(loanRef, {
-          applicantName: data.applicantName,
-          amount: data.amount,
-          remarks: data.remarks,
+          ...data,
           updatedAt: serverTimestamp(),
         });
         toast({
@@ -179,6 +191,30 @@ export function LoanFormSheet({
                   <FormControl>
                     <Input type="number" placeholder="5000" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="paymentTerm"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Term (Months)</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a payment term" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {paymentTermOptions.map(term => (
+                        <SelectItem key={term} value={String(term)}>
+                          {term} month{term > 1 ? 's' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
