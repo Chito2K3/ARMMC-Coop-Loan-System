@@ -23,8 +23,19 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createLoan, updateLoan } from "@/app/actions";
+import {
+  addDocumentNonBlocking,
+  updateDocumentNonBlocking,
+} from "@/firebase/non-blocking-updates";
 import type { LoanSerializable } from "@/lib/types";
+import {
+  collection,
+  doc,
+  serverTimestamp,
+  getCountFromServer,
+} from "firebase/firestore";
+import { useFirestore } from "@/firebase";
+import { useRouter } from "next/navigation";
 
 const loanFormSchema = z.object({
   applicantName: z.string().min(2, {
@@ -50,6 +61,8 @@ export function LoanFormSheet({
   loan,
 }: LoanFormSheetProps) {
   const isEditMode = !!loan;
+  const firestore = useFirestore();
+  const router = useRouter();
 
   const form = useForm<LoanFormValues>({
     resolver: zodResolver(loanFormSchema),
@@ -67,25 +80,60 @@ export function LoanFormSheet({
   });
 
   async function onSubmit(data: LoanFormValues) {
+    if (!firestore) {
+      toast({
+        variant: "destructive",
+        title: "An error occurred",
+        description: "Firestore is not available.",
+      });
+      return;
+    }
     try {
-      if (isEditMode) {
-        const result = await updateLoan(loan.id, {
+      if (isEditMode && loan) {
+        const loanRef = doc(firestore, "loans", loan.id);
+        updateDocumentNonBlocking(loanRef, {
           applicantName: data.applicantName,
           amount: data.amount,
           remarks: data.remarks,
+          updatedAt: serverTimestamp(),
         });
-        if (!result.success) throw new Error(result.message);
         toast({
-          title: "Loan Updated",
-          description: "The loan application has been successfully updated.",
+          title: "Loan Update In Progress",
+          description: "The loan application is being updated.",
         });
       } else {
-        const result = await createLoan(data);
-        if (!result.success) throw new Error(result.message);
+        const loansCollection = collection(firestore, "loans");
+        const snapshot = await getCountFromServer(loansCollection);
+        const nextLoanNumber = snapshot.data().count + 1;
+
+        const newLoan = {
+          ...data,
+          No: nextLoanNumber,
+          salary: 0,
+          status: "pending" as const,
+          bookkeeperChecked: false,
+          payrollChecked: false,
+          approvals: {
+            approver1: "pending" as const,
+            approver2: "pending" as const,
+          },
+          denialRemarks: "",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        const docRefPromise = addDocumentNonBlocking(
+          collection(firestore, "loans"),
+          newLoan
+        );
         toast({
           title: "Loan Created",
           description: "The new loan application has been saved.",
         });
+        const docRef = await docRefPromise;
+        if (docRef && docRef.id) {
+          router.push(`/loan/${docRef.id}`);
+        }
       }
       onOpenChange(false);
       form.reset();
@@ -102,7 +150,9 @@ export function LoanFormSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-lg">
         <SheetHeader className="mb-4">
-          <SheetTitle>{isEditMode ? "Edit Loan" : "New Loan Application"}</SheetTitle>
+          <SheetTitle>
+            {isEditMode ? "Edit Loan" : "New Loan Application"}
+          </SheetTitle>
           <SheetDescription>
             {isEditMode
               ? "Update the details of the loan application."

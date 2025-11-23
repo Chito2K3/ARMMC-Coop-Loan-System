@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { PlusCircle, ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { PlusCircle, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,7 +24,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,67 +31,27 @@ import type { LoanSerializable, LoanStatus } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { format } from "date-fns";
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { collection, query, where, orderBy } from "firebase/firestore";
+import { Skeleton } from "./ui/skeleton";
 
-type SortConfig = {
-  key: "createdAt" | "updatedAt" | "amount" | "applicantName";
-  direction: "asc" | "desc";
-};
-
-export function DashboardClient({
-  initialLoans,
-}: {
-  initialLoans: LoanSerializable[];
-}) {
-  const [loans, setLoans] = React.useState(initialLoans);
+export function DashboardClient() {
+  const firestore = useFirestore();
   const [statusFilter, setStatusFilter] = React.useState<"all" | LoanStatus>(
     "all"
   );
-  const [sortConfig, setSortConfig] = React.useState<SortConfig>({
-    key: "createdAt",
-    direction: "desc",
-  });
   const [isCreateSheetOpen, setCreateSheetOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    setLoans(initialLoans);
-  }, [initialLoans]);
+  const loansQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    const baseQuery = collection(firestore, 'loans');
+    if (statusFilter !== 'all') {
+      return query(baseQuery, where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
+    }
+    return query(baseQuery, orderBy('createdAt', 'desc'));
+  }, [firestore, statusFilter]);
 
-  const sortedAndFilteredLoans = React.useMemo(() => {
-    let filtered =
-      statusFilter === "all"
-        ? [...loans]
-        : loans.filter((loan) => loan.status === statusFilter);
-
-    return filtered.sort((a, b) => {
-      let aValue = a[sortConfig.key];
-      let bValue = b[sortConfig.key];
-
-      if (sortConfig.key === "createdAt" || sortConfig.key === "updatedAt") {
-        aValue = new Date(aValue).getTime();
-        bValue = new Date(bValue).getTime();
-      }
-
-      if (aValue < bValue) {
-        return sortConfig.direction === "asc" ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === "asc" ? 1 : -1;
-      }
-      return 0;
-    });
-  }, [loans, statusFilter, sortConfig]);
-  
-  const handleSort = (key: SortConfig['key']) => {
-    setSortConfig(prev => ({
-        key,
-        direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
-
-  const getSortIndicator = (key: SortConfig['key']) => {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === 'desc' ? ' ▼' : ' ▲';
-  };
+  const { data: loans, isLoading } = useCollection<LoanSerializable>(loansQuery);
 
   return (
     <>
@@ -104,7 +63,7 @@ export function DashboardClient({
           </p>
         </div>
         <Button onClick={() => setCreateSheetOpen(true)}>
-          <PlusCircle className="h-4 w-4 mr-2" />
+          <PlusCircle className="mr-2 h-4 w-4" />
           Create Loan
         </Button>
       </div>
@@ -135,15 +94,13 @@ export function DashboardClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead onClick={() => handleSort('applicantName')} className="cursor-pointer">
-                  Applicant{getSortIndicator('applicantName')}
-                </TableHead>
+                <TableHead>Applicant</TableHead>
                 <TableHead className="hidden sm:table-cell">Status</TableHead>
-                <TableHead className="hidden sm:table-cell text-right" onClick={() => handleSort('amount')} className="cursor-pointer">
-                  Amount{getSortIndicator('amount')}
+                <TableHead className="hidden sm:table-cell text-right">
+                  Amount
                 </TableHead>
-                <TableHead className="hidden md:table-cell text-right" onClick={() => handleSort('createdAt')} className="cursor-pointer">
-                  Created At{getSortIndicator('createdAt')}
+                <TableHead className="hidden md:table-cell text-right">
+                  Created At
                 </TableHead>
                 <TableHead>
                   <span className="sr-only">Actions</span>
@@ -151,8 +108,22 @@ export function DashboardClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedAndFilteredLoans.length > 0 ? (
-                sortedAndFilteredLoans.map((loan) => (
+              {isLoading && (
+                <>
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Skeleton className="h-8 w-full" />
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Skeleton className="h-8 w-full" />
+                    </TableCell>
+                  </TableRow>
+                </>
+              )}
+              {!isLoading && loans && loans.length > 0 ? (
+                loans.map((loan) => (
                   <TableRow key={loan.id}>
                     <TableCell>
                       <div className="font-medium">{loan.applicantName}</div>
@@ -188,24 +159,22 @@ export function DashboardClient({
                           <DropdownMenuItem asChild>
                             <Link href={`/loan/${loan.id}`}>View Details</Link>
                           </DropdownMenuItem>
-                          <DropdownMenuItem>Mark as Approved</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            Deny
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    No loans found.
-                  </TableCell>
-                </TableRow>
+                !isLoading && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      No loans found for the selected status.
+                    </TableCell>
+                  </TableRow>
+                )
               )}
             </TableBody>
           </Table>

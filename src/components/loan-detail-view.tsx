@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   Check,
   ChevronLeft,
-  Circle,
   FilePenLine,
   Loader2,
   ThumbsDown,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { doc, serverTimestamp } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,48 +39,46 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/componentsui/input";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
-import { updateLoan } from "@/app/actions";
+import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
+import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
 import { toast } from "@/hooks/use-toast";
-import type { ApprovalStatus, LoanSerializable, LoanStatus } from "@/lib/types";
+import type { ApprovalStatus, LoanSerializable, LoanWrite } from "@/lib/types";
 import { StatusBadge } from "./status-badge";
 import { LoanFormSheet } from "./loan-form-sheet";
 import { AIRiskAssessment } from "./ai-risk-assessment";
 
-export function LoanDetailView({
-  initialLoan,
-}: {
-  initialLoan: LoanSerializable;
-}) {
+export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
-  const [loan, setLoan] = React.useState(initialLoan);
+  const firestore = useFirestore();
+
+  const loanRef = useMemoFirebase(
+    () => (firestore ? doc(firestore, "loans", loanId) : null),
+    [firestore, loanId]
+  );
+  
+  const { data: loan, isLoading } = useDoc<LoanSerializable>(loanRef);
+
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
   const [isDenyDialogOpen, setDenyDialogOpen] = React.useState(false);
   const [denialRemarks, setDenialRemarks] = React.useState("");
 
-  React.useEffect(() => {
-    setLoan(initialLoan);
-  }, [initialLoan]);
-
   const handleUpdate = async (
-    data: Partial<Omit<LoanSerializable, "id">>
+    data: Partial<LoanWrite>
   ) => {
+    if (!loanRef) return;
     setIsSubmitting(true);
     try {
-      const result = await updateLoan(loan.id, data);
-      if (result.success) {
-        toast({
-          title: "Update Successful",
-          description: "The loan application has been updated.",
-        });
-        // We don't need to manually set state as revalidation will trigger a re-render
-      } else {
-        throw new Error(result.message);
-      }
+      updateDocumentNonBlocking(loanRef, { ...data, updatedAt: serverTimestamp() });
+      toast({
+        title: "Update In Progress",
+        description: "The loan application is being updated.",
+      });
     } catch (error) {
       toast({
         variant: "destructive",
@@ -109,15 +107,78 @@ export function LoanDetailView({
   const InfoItem = ({
     label,
     value,
+    isLoading,
   }: {
     label: string;
     value: React.ReactNode;
+    isLoading?: boolean;
   }) => (
     <div className="flex justify-between items-center">
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium">{value}</p>
+      {isLoading ? <Skeleton className="h-5 w-24" /> : <div className="text-sm font-medium text-right">{value}</div>}
     </div>
   );
+
+  if (isLoading && !loan) {
+     return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" disabled>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-7 w-1/2" />
+                <Skeleton className="h-4 w-3/4" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-7 w-1/2" />
+                 <Skeleton className="h-4 w-3/4" />
+              </CardHeader>
+              <CardContent>
+                 <Skeleton className="h-10 w-32" />
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-7 w-1/2" />
+                <Skeleton className="h-4 w-3/4" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!loan) {
+    return (
+        <div className="text-center py-10">
+            <p className="mb-4">This loan application could not be found. It might have been deleted.</p>
+            <Button onClick={() => router.push('/')}>Go to Dashboard</Button>
+        </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
