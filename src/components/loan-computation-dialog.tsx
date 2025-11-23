@@ -56,8 +56,6 @@ export function LoanComputationDialog({
     const term = loan.paymentTerm;
     const interestRate = 0.015; // 1.5% diminishing
 
-    const monthlyAmortizationPrincipal = Math.round((principal / term) * 100) / 100;
-    
     const schedule: {
       month: number;
       beginningBalance: number;
@@ -68,16 +66,19 @@ export function LoanComputationDialog({
 
     let beginningBalance = principal;
     let totalInterest = 0;
+    
+    // Use integer arithmetic for principal amortization to avoid floating point issues
+    const monthlyPrincipalPayment = Math.floor(principal / term);
+    let totalPrincipalPaid = 0;
 
     for (let month = 1; month <= term; month++) {
       const interest = beginningBalance * interestRate;
       totalInterest += interest;
 
-      let principalPayment = monthlyAmortizationPrincipal;
+      let principalPayment = monthlyPrincipalPayment;
 
-      // On the last month, adjust the principal payment to ensure the balance is exactly 0
+      // On the last month, adjust the principal to make sure it sums to the total principal
       if (month === term) {
-        const totalPrincipalPaid = monthlyAmortizationPrincipal * (term - 1);
         principalPayment = principal - totalPrincipalPaid;
       }
       
@@ -88,12 +89,14 @@ export function LoanComputationDialog({
         beginningBalance: beginningBalance,
         interest: interest,
         principal: principalPayment,
-        endingBalance: endingBalance < 0 ? 0 : endingBalance, // Prevent negative balance display
+        endingBalance: endingBalance < 0 ? 0 : endingBalance,
       });
 
       beginningBalance = endingBalance;
+      totalPrincipalPaid += principalPayment;
     }
-
+    
+    const monthlyAmortizationPrincipal = Math.round((principal / term) * 100) / 100;
 
     // Fees calculation
     const loanTermInYears = term / 12;
@@ -101,17 +104,26 @@ export function LoanComputationDialog({
     const shareCapital = principal * 0.01;
 
     // First month deductions
-    const firstMonthAmortization = term === 1 ? 0 : monthlyAmortizationPrincipal;
-    const firstMonthInterest = principal * interestRate;
+    const firstMonthInterest = schedule[0].interest;
 
+    // For single-payment loans, the amortization is not deducted from proceeds
+    const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
+    
     // Total deductions
     const totalDeductions =
       serviceCharge +
       shareCapital +
-      firstMonthAmortization +
+      firstMonthAmortizationDeduction +
       firstMonthInterest;
 
     const netProceeds = principal - totalDeductions;
+    
+    // For 1-month term, interest is deducted upfront, so it's not paid back in amortization.
+    if (term === 1) {
+       schedule[0].interest = 0;
+       totalInterest = schedule[0].interest;
+    }
+
 
     return {
       principal,
@@ -121,7 +133,7 @@ export function LoanComputationDialog({
       schedule,
       serviceCharge,
       shareCapital,
-      firstMonthAmortization,
+      firstMonthAmortization: firstMonthAmortizationDeduction,
       firstMonthInterest,
       totalDeductions,
       netProceeds,
@@ -178,7 +190,7 @@ export function LoanComputationDialog({
                   Total Diminishing Interest
                 </span>
                 <span className="font-medium">
-                  {formatCurrency(computation.totalInterest)}
+                  {formatCurrency(computation.firstMonthInterest)}
                 </span>
               </div>
 
@@ -274,7 +286,7 @@ export function LoanComputationDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between flex-row-reverse sm:flex-row">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
           {loan.status === 'approved' && (
