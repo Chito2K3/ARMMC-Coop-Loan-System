@@ -13,6 +13,7 @@ export type LoanPurpose =
 
 export interface Loan {
   id: string;
+  loanNumber: number;
   applicantName: string;
   amount: number;
   salary: number;

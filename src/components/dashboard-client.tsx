@@ -64,7 +64,7 @@ export function DashboardClient() {
     // The data from Firestore might not have the methods on the Timestamps
     // when it's first coming through, so we need to handle that.
     return rawLoans.map(loan => {
-      const createdAtDate = loan.createdAt && (loan.createdAt as any).seconds 
+      const createdAtDate = loan.createdAt && (loan.createdAt as any).seconds
         ? new Timestamp((loan.createdAt as any).seconds, (loan.createdAt as any).nanoseconds).toDate()
         : new Date();
       return {
@@ -73,7 +73,7 @@ export function DashboardClient() {
       };
     });
   }, [rawLoans]);
-  
+
 
   return (
     <>
@@ -90,7 +90,7 @@ export function DashboardClient() {
         </Button>
       </div>
 
-      <Card>
+      <Card className="border-border/50 shadow-xl bg-card/50 backdrop-blur-sm">
         <CardHeader className="px-7">
           <CardTitle>Loan Applications</CardTitle>
           <CardDescription>
@@ -178,7 +178,13 @@ export function DashboardClient() {
                       colSpan={5}
                       className="h-24 text-center text-muted-foreground"
                     >
-                      No loans found.
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <p>No loans found.</p>
+                        <Button variant="outline" size="sm" onClick={() => setCreateSheetOpen(true)}>
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Create Loan
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )

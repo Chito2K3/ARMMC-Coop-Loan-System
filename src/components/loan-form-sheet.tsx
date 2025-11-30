@@ -40,6 +40,7 @@ import {
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
 } from "@/firebase/non-blocking-updates";
+import { getNextLoanNumber } from "@/firebase/counter";
 import type { LoanSerializable, LoanType, LoanPurpose } from "@/lib/types";
 
 const paymentTermOptions = [1, 3, 4, 6, 9, 12, 18, 24];
@@ -92,21 +93,21 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     resolver: zodResolver(loanFormSchema),
     defaultValues: isEditMode
       ? {
-          applicantName: loan.applicantName,
-          amount: loan.amount,
-          paymentTerm: loan.paymentTerm,
-          loanType: loan.loanType,
-          purpose: loan.purpose,
-          remarks: loan.remarks || "",
-        }
+        applicantName: loan.applicantName,
+        amount: loan.amount,
+        paymentTerm: loan.paymentTerm,
+        loanType: loan.loanType,
+        purpose: loan.purpose,
+        remarks: loan.remarks || "",
+      }
       : {
-          applicantName: "",
-          amount: 0,
-          paymentTerm: 6,
-          loanType: "Cash Advance",
-          purpose: "Bills Payment",
-          remarks: "",
-        },
+        applicantName: "",
+        amount: 0,
+        paymentTerm: 6,
+        loanType: "Cash Advance",
+        purpose: "Bills Payment",
+        remarks: "",
+      },
   });
 
   async function onSubmit(data: LoanFormValues) {
@@ -131,8 +132,12 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           description: "The loan application is being updated.",
         });
       } else {
+        // Get the next loan number
+        const loanNumber = await getNextLoanNumber(firestore);
+
         const newLoan = {
           ...data,
+          loanNumber,
           salary: 0,
           status: "pending" as const,
           bookkeeperChecked: false,
@@ -214,7 +219,17 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                     <FormItem>
                       <FormLabel>Loan Amount</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="5000" {...field} />
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            ₱
+                          </span>
+                          <Input
+                            type="number"
+                            placeholder="5000"
+                            className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            {...field}
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

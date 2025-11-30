@@ -108,7 +108,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       ...rawLoan,
       createdAt: toDate(rawLoan.createdAt) || new Date(),
       updatedAt: toDate(rawLoan.updatedAt) || new Date(),
-      releasedAt: toDate(rawLoan.releasedAt),
+      releasedAt: toDate(rawLoan.releasedAt) || undefined,
+      loanNumber: rawLoan.loanNumber || 0, // Fallback for existing loans
     };
   }, [rawLoan]);
 
@@ -153,29 +154,29 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     try {
       const releasedAtDate = new Date();
       const batch = writeBatch(firestore);
-  
+
       // 1. Update the loan status and releasedAt timestamp
       batch.update(loanRef, {
         status: 'released',
         releasedAt: Timestamp.fromDate(releasedAtDate),
         updatedAt: serverTimestamp(),
       });
-  
+
       // 2. Generate and add payment schedule documents to the batch
       const paymentSchedule = generatePaymentSchedule(loan, releasedAtDate);
       paymentSchedule.forEach((payment) => {
         const paymentRef = doc(collection(firestore, 'loans', loanId, 'payments'));
         batch.set(paymentRef, payment);
       });
-  
+
       // 3. Commit the batch to save all changes at once
       await batch.commit();
-  
+
       toast({
         title: 'Loan Released',
         description: 'The funds have been released and the collection schedule is generated.',
       });
-      
+
       setComputationDialogOpen(false); // Close the dialog on success
     } catch (error) {
       console.error("Error releasing loan: ", error); // Add console log for debugging
@@ -321,11 +322,11 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            Loan #{loan.id.slice(-6)}
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+            {loan.applicantName}
           </h1>
           <p className="text-muted-foreground">
-            Applicant: {loan.applicantName}
+            Loan #{loan.loanNumber}
           </p>
         </div>
       </div>
@@ -352,14 +353,15 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               <InfoItem
                 label="Salary"
                 value={
-                  <div className="flex gap-2 items-center">
+                  <div className="relative flex items-center w-32">
+                    <span className="absolute left-2 text-muted-foreground">₱</span>
                     <Input
                       type="number"
                       defaultValue={loan.salary}
                       onBlur={(e) =>
                         handleUpdate({ salary: Number(e.target.value) })
                       }
-                      className="h-8 text-right w-32"
+                      className="h-8 pl-6 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       disabled={isSubmitting || loan.status === 'fully-paid'}
                     />
                   </div>
@@ -367,9 +369,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               />
               <InfoItem
                 label="Payment Term"
-                value={`${loan.paymentTerm} month${
-                  loan.paymentTerm > 1 ? 's' : ''
-                }`}
+                value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''
+                  }`}
               />
               <InfoItem
                 label="Status"
@@ -582,4 +583,4 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
   );
 }
 
-    
+
