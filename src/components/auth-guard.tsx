@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useFirestore } from "@/firebase/provider";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
     const { user, isUserLoading } = useUser();
@@ -14,36 +14,59 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const [isRoleChecked, setIsRoleChecked] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
 
     useEffect(() => {
-        if (isUserLoading || !user) {
+        if (isUserLoading || !user || !firestore) {
             setIsRoleChecked(true);
+            setIsAuthorized(false);
             return;
         }
 
+        let isMounted = true;
+
         const checkRole = async () => {
             try {
-                const userRef = doc(firestore, 'users', user.uid);
-                const userSnap = await getDoc(userRef);
+                const usersRef = collection(firestore, 'users');
+                const q = query(usersRef, where('email', '==', user.email));
+                const querySnapshot = await getDocs(q);
                 
-                if (userSnap.exists()) {
-                    const role = userSnap.data().role;
-                    if (role === 'admin' && !pathname.startsWith('/admin')) {
-                        router.push('/admin');
-                        return;
-                    } else if (role !== 'admin' && pathname.startsWith('/admin')) {
+                if (!isMounted) return;
+
+                if (!querySnapshot.empty) {
+                    const role = querySnapshot.docs[0].data().role;
+                    const isAdminPath = pathname.startsWith('/admin');
+                    const isAdmin = role === 'admin';
+                    
+                    if (isAdminPath && !isAdmin) {
                         router.push('/');
-                        return;
+                        setIsAuthorized(false);
+                    } else if (!isAdminPath && isAdmin) {
+                        router.push('/admin');
+                        setIsAuthorized(false);
+                    } else {
+                        setIsAuthorized(true);
                     }
+                } else {
+                    setIsAuthorized(true);
                 }
             } catch (err) {
                 console.error('Failed to check role:', err);
+                if (isMounted) {
+                    setIsAuthorized(true);
+                }
             } finally {
-                setIsRoleChecked(true);
+                if (isMounted) {
+                    setIsRoleChecked(true);
+                }
             }
         };
 
         checkRole();
+
+        return () => {
+            isMounted = false;
+        };
     }, [user, isUserLoading, firestore, router, pathname]);
 
     if (isUserLoading || !isRoleChecked) {
@@ -56,6 +79,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     if (!user) {
         return <LoginPage />;
+    }
+
+    if (!isAuthorized) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-background z-50">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
     }
 
     return <>{children}</>;
