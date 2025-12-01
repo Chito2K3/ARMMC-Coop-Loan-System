@@ -29,6 +29,7 @@ interface LoanComputationDialogProps {
   loan: Loan;
   onRelease: () => Promise<void>;
   isSubmitting: boolean;
+  userRole?: string | null;
 }
 
 const formatCurrency = (value: number) => {
@@ -45,6 +46,7 @@ export function LoanComputationDialog({
   loan,
   onRelease,
   isSubmitting,
+  userRole,
 }: LoanComputationDialogProps) {
   const router = useRouter();
   
@@ -292,7 +294,8 @@ export function LoanComputationDialog({
           {loan.status === 'approved' && (
             <Button
               onClick={handleRelease}
-              disabled={isSubmitting}
+              disabled={isSubmitting || userRole !== 'bookkeeper'}
+              className={userRole !== 'bookkeeper' ? 'opacity-40' : ''}
             >
               {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

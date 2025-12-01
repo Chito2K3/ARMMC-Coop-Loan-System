@@ -438,7 +438,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           </Card>
 
           {(loan.status === 'released' || loan.status === 'fully-paid') && loan.releasedAt && (
-            <CollectionSchedule loan={loan} />
+            <CollectionSchedule loan={loan} userRole={userRole} />
           )}
         </div>
 
@@ -612,6 +612,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           loan={loan}
           onRelease={handleRelease}
           isSubmitting={isSubmitting}
+          userRole={userRole}
         />
       )}
     </div>

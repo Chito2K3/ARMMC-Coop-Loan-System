@@ -10,7 +10,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { differenceInDays, format } from 'date-fns';
-import { Calendar as CalendarIcon, Undo2 } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,12 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -46,6 +52,7 @@ import { toast } from '@/hooks/use-toast';
 
 interface CollectionScheduleProps {
   loan: Loan;
+  userRole?: string | null;
 }
 
 const formatCurrency = (value: number) => {
@@ -59,7 +66,7 @@ const formatCurrency = (value: number) => {
 const PENALTY_AMOUNT = 500;
 const GRACE_PERIOD_DAYS = 3;
 
-export function CollectionSchedule({ loan }: CollectionScheduleProps) {
+export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) {
   const firestore = useFirestore();
 
   const paymentsQuery = useMemoFirebase(() => {
@@ -96,12 +103,8 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
       description: 'The payment has been marked as paid.',
     });
     
-    // Check if all payments are now paid
     const allPaid = payments.every(p => {
-      // The current payment is being updated, so its state in `payments` array is old.
-      // We count it as paid for this check.
       if (p.id === paymentId) return true;
-      // Check the status of all other payments.
       return p.status === 'paid';
     });
 
@@ -129,6 +132,34 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
     });
   };
 
+  const handleDenyPenalty = (paymentId: string, paymentNumber: number) => {
+    if (!firestore) return;
+    const currentPayment = payments.find(p => p.id === paymentId);
+    if (!currentPayment) return;
+
+    const penalty = calculatePenalty(currentPayment);
+    
+    const currentPaymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
+    updateDocumentNonBlocking(currentPaymentRef, {
+      penaltyDenied: true,
+      updatedAt: serverTimestamp(),
+    });
+
+    const nextPayment = payments.find(p => p.paymentNumber === paymentNumber + 1);
+    if (nextPayment) {
+      const nextPaymentRef = doc(firestore, 'loans', loan.id, 'payments', nextPayment.id);
+      updateDocumentNonBlocking(nextPaymentRef, {
+        amount: nextPayment.amount + penalty,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    toast({
+      title: 'Penalty Deferred',
+      description: 'The penalty has been carried over to the next payment.',
+    });
+  };
+
   const getPaymentStatus = (payment: (typeof payments)[0]) => {
     const dueDate = payment.dueDate;
     const paymentDate = payment.paymentDate;
@@ -151,20 +182,19 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
   };
 
   const calculatePenalty = (payment: (typeof payments)[0]) => {
-    if (payment.penaltyWaived) return 0;
+    if (payment.penaltyWaived || payment.penaltyDenied) return 0;
     
     const dueDate = payment.dueDate;
     const paymentDate = payment.paymentDate;
     
-    if (paymentDate) { // If it's paid
+    if (paymentDate) {
       const isLate = differenceInDays(paymentDate, dueDate) > GRACE_PERIOD_DAYS;
       return isLate ? PENALTY_AMOUNT : 0;
-    } else { // If it's not paid yet
+    } else {
       const isOverdue = differenceInDays(new Date(), dueDate) > GRACE_PERIOD_DAYS;
       return isOverdue ? PENALTY_AMOUNT : 0;
     }
   };
-
 
   return (
     <Card>
@@ -200,74 +230,91 @@ export function CollectionSchedule({ loan }: CollectionScheduleProps) {
                 </>
               )}
               {!isLoading && payments.length === 0 && (
-                 <TableRow>
-                 <TableCell colSpan={7} className="h-24 text-center">
-                   No payment schedule found.
-                 </TableCell>
-               </TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    No payment schedule found.
+                  </TableCell>
+                </TableRow>
               )}
               {payments.map((payment) => {
                 const penalty = calculatePenalty(payment);
-                return(
-                <TableRow key={payment.id}>
-                  <TableCell className="font-medium">
-                    {payment.paymentNumber}
-                  </TableCell>
-                  <TableCell>{format(payment.dueDate, 'MMM d, yyyy')}</TableCell>
-                  <TableCell>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={'outline'}
-                          className={cn(
-                            'w-[200px] justify-start text-left font-normal',
-                            !payment.paymentDate && 'text-muted-foreground'
-                          )}
-                          disabled={loan.status === 'fully-paid'}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {payment.paymentDate ? (
-                            format(payment.paymentDate, 'MMM d, yyyy')
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={payment.paymentDate}
-                          onSelect={(date) => handleDateChange(payment.id, date)}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </TableCell>
-                  <TableCell>{getPaymentStatus(payment)}</TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(payment.amount)}
-                  </TableCell>
-                  <TableCell
-                    className={cn('text-right font-medium', penalty > 0 && 'text-destructive')}
-                  >
-                    {formatCurrency(penalty)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {penalty > 0 && !payment.penaltyWaived && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleWaivePenalty(payment.id)}
-                        title="Waive Penalty"
-                        disabled={loan.status === 'fully-paid'}
-                      >
-                       <Undo2 className="h-4 w-4" />
-                        <span className="sr-only">Waive Penalty</span>
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )})}
+                return (
+                  <TableRow key={payment.id}>
+                    <TableCell className="font-medium">
+                      {payment.paymentNumber}
+                    </TableCell>
+                    <TableCell>{format(payment.dueDate, 'MMM d, yyyy')}</TableCell>
+                    <TableCell>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={'outline'}
+                            className={cn(
+                              'w-[200px] justify-start text-left font-normal',
+                              !payment.paymentDate && 'text-muted-foreground',
+                              userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
+                            )}
+                            disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {payment.paymentDate ? (
+                              format(payment.paymentDate, 'MMM d, yyyy')
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={payment.paymentDate}
+                            onSelect={(date) => handleDateChange(payment.id, date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </TableCell>
+                    <TableCell>{getPaymentStatus(payment)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(payment.amount)}
+                    </TableCell>
+                    <TableCell
+                      className={cn('text-right font-medium', penalty > 0 && 'text-destructive')}
+                    >
+                      {formatCurrency(penalty)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {penalty > 0 && !payment.penaltyWaived && !payment.penaltyDenied && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={loan.status === 'fully-paid' || userRole !== 'approver'}
+                              className={userRole !== 'approver' ? 'opacity-50 cursor-not-allowed' : ''}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleWaivePenalty(payment.id)}>
+                              Waive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDenyPenalty(payment.id, payment.paymentNumber)}>
+                              Deny
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      {(payment.penaltyWaived || payment.penaltyDenied) && (
+                        <span className="text-xs text-muted-foreground">
+                          {payment.penaltyWaived ? 'Waived' : 'Deferred'}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </ScrollArea>
