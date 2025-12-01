@@ -50,7 +50,8 @@ import {
   updateDocumentNonBlocking,
   deleteDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
-import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { getOrCreateUser } from '@/firebase/user-service';
 import { toast } from '@/hooks/use-toast';
 import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
 import { StatusBadge } from './status-badge';
@@ -89,6 +90,16 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
 export function LoanDetailView({ loanId }: { loanId: string }) {
   const router = useRouter();
   const firestore = useFirestore();
+  const { user } = useUser();
+  const [userRole, setUserRole] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (user && firestore) {
+      getOrCreateUser(firestore, user.uid, user.email || '', user.displayName || '')
+        .then(profile => setUserRole(profile?.role || null))
+        .catch(() => setUserRole(null));
+    }
+  }, [user, firestore]);
 
   const loanRef = useMemoFirebase(
     () => (firestore ? doc(firestore, 'loans', loanId) : null),
@@ -314,6 +325,9 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid'].includes(loan.status);
+  const isPayrollCheckerRole = userRole === 'payrollChecker';
+  const isBookkeeperRole = userRole === 'bookkeeper';
+  const isApproverRole = userRole === 'approver';
 
   return (
     <div className="space-y-6">
@@ -362,7 +376,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                         handleUpdate({ salary: Number(e.target.value) })
                       }
                       className="h-8 pl-6 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      disabled={isSubmitting || loan.status === 'fully-paid'}
+                      disabled={isSubmitting || loan.status === 'fully-paid' || (isPayrollCheckerRole && loan.status !== 'pending') || isBookkeeperRole}
                     />
                   </div>
                 }
@@ -404,7 +418,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 size="sm"
                 variant="outline"
                 onClick={() => setSheetOpen(true)}
-                disabled={loan.status === 'fully-paid'}
+                disabled={loan.status === 'fully-paid' || isPayrollCheckerRole || (isBookkeeperRole && loan.status !== 'pending') || isApproverRole}
+                className={(isPayrollCheckerRole || (isBookkeeperRole && loan.status !== 'pending') || isApproverRole) ? 'opacity-40' : ''}
               >
                 <FilePenLine className="h-4 w-4 mr-2" />
                 Edit
@@ -413,7 +428,8 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 variant="destructive"
                 size="sm"
                 onClick={() => setDeleteDialogOpen(true)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isPayrollCheckerRole || (isBookkeeperRole && loan.status !== 'pending') || isApproverRole}
+                className={(isPayrollCheckerRole || (isBookkeeperRole && loan.status !== 'pending') || isApproverRole) ? 'opacity-40' : ''}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Loan
@@ -442,49 +458,68 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                   onClick={() => handleUpdate({ status: 'approved' })}
                   disabled={
                     isSubmitting ||
-                    ['approved', 'released', 'fully-paid'].includes(loan.status)
+                    ['approved', 'released', 'fully-paid'].includes(loan.status) ||
+                    isPayrollCheckerRole ||
+                    isBookkeeperRole
                   }
+                  className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
                 >
                   <ThumbsUp className="mr-2 h-4 w-4" /> Approve
                 </Button>
                 <Button
                   variant="destructive"
                   onClick={() => setDenyDialogOpen(true)}
-                  disabled={isSubmitting || loan.status === 'denied' || isWorkflowDisabled}
+                  disabled={isSubmitting || loan.status === 'denied' || isWorkflowDisabled || isPayrollCheckerRole || isBookkeeperRole}
+                  className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
                 >
                   <ThumbsDown className="mr-2 h-4 w-4" /> Deny
                 </Button>
               </div>
+              {isApproverRole && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  Approval only
+                </div>
+              )}
               <Separator />
               <div className="space-y-4">
                 <h4 className="font-medium">Checklists</h4>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="bookkeeperChecked">Bookkeeper Checked</Label>
-                  <Button
-                    variant={loan.bookkeeperChecked ? 'default' : 'outline'}
-                    size="icon"
-                    onClick={() =>
-                      handleUpdate({
-                        bookkeeperChecked: !loan.bookkeeperChecked,
-                      })
-                    }
-                    disabled={isSubmitting || isWorkflowDisabled}
-                  >
-                    {loan.bookkeeperChecked ? <Check /> : <X />}
-                  </Button>
+                  {isApproverRole ? (
+                    <div className="text-sm">{<Check className="h-4 w-4" />}</div>
+                  ) : (
+                    <Button
+                      variant={loan.bookkeeperChecked ? 'default' : 'outline'}
+                      size="icon"
+                      onClick={() =>
+                        handleUpdate({
+                          bookkeeperChecked: !loan.bookkeeperChecked,
+                        })
+                      }
+                      disabled={isSubmitting || isWorkflowDisabled || isPayrollCheckerRole || isBookkeeperRole}
+                      className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
+                    >
+                      {loan.bookkeeperChecked ? <Check /> : <X />}
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="payrollChecked">Payroll Checked</Label>
-                  <Button
-                    variant={loan.payrollChecked ? 'default' : 'outline'}
-                    size="icon"
-                    onClick={() =>
-                      handleUpdate({ payrollChecked: !loan.payrollChecked })
-                    }
-                    disabled={isSubmitting || isWorkflowDisabled}
-                  >
-                    {loan.payrollChecked ? <Check /> : <X />}
-                  </Button>
+                  {isApproverRole ? (
+                    <div className="text-sm">{loan.salary > 0 ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}</div>
+                  ) : (
+                    <Button
+                      variant={loan.payrollChecked ? 'default' : 'outline'}
+                      size="icon"
+                      onClick={() =>
+                        handleUpdate({ payrollChecked: !loan.payrollChecked })
+                      }
+                      disabled={isSubmitting || isWorkflowDisabled || isPayrollCheckerRole || isBookkeeperRole}
+                      className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
+                    >
+                      {loan.payrollChecked ? <Check /> : <X />}
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
