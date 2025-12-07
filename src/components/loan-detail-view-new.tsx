@@ -449,10 +449,10 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Column 1: Basic Information */}
-        <div className="flex flex-col h-full space-y-6">
-          <Card className="flex-1">
+        <div className="space-y-6">
+          <Card>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
               <CardDescription>Core loan details</CardDescription>
@@ -507,8 +507,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         </div>
 
         {/* Column 2: Workflow Progress */}
-        <div className="flex flex-col h-full space-y-6">
-          <Card className="flex-1">
+        <div className="space-y-6">
+          <Card>
             <CardHeader>
               <CardTitle>Workflow Progress</CardTitle>
               <CardDescription>Current status: <StatusBadge status={loan.status} /></CardDescription>
@@ -516,8 +516,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             <CardContent className="space-y-6">
               {/* Progress Timeline */}
               <div className="space-y-4">
-                <div className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  loan.status === 'pending' ? 'border-primary/20 bg-card' : 'border-border bg-muted/30'
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                  loan.status === 'pending' ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'
                 }`}>
                   <ClipboardCheck className={`h-5 w-5 ${
                     ['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
@@ -529,12 +529,12 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                   {['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
                 </div>
 
-                <div className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  loan.status === 'pending' && (!loan.salary || loan.salary === 0) ? 'border-yellow-500/20 bg-card' : 'border-border bg-muted/30'
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                  loan.status === 'pending' && (!loan.salary || loan.salary === 0) ? 'bg-yellow-50 border border-yellow-200' : 'bg-muted/50'
                 }`}>
-                  <span className={`h-5 w-5 flex items-center justify-center text-sm font-bold ${
+                  <DollarSign className={`h-5 w-5 ${
                     loan.payrollChecked ? 'text-green-500' : 'text-yellow-500'
-                  }`}>₱</span>
+                  }`} />
                   <div className="flex-1">
                     <p className="font-medium text-sm">Salary Input</p>
                     <p className="text-xs text-muted-foreground">
@@ -544,8 +544,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                   {loan.payrollChecked && <Check className="h-4 w-4 text-green-500" />}
                 </div>
 
-                <div className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  loan.status === 'pending' && loan.payrollChecked ? 'border-purple-500/20 bg-card' : 'border-border bg-muted/30'
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                  loan.status === 'pending' && loan.payrollChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'
                 }`}>
                   <ThumbsUp className={`h-5 w-5 ${
                     ['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 
@@ -562,8 +562,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                   {loan.status === 'denied' && <X className="h-4 w-4 text-red-500" />}
                 </div>
 
-                <div className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  loan.status === 'approved' ? 'border-green-500/20 bg-card' : 'border-border bg-muted/30'
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${
+                  loan.status === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-muted/50'
                 }`}>
                   <Banknote className={`h-5 w-5 ${
                     ['released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
@@ -579,9 +579,9 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               </div>
 
               {loan.status === 'denied' && loan.denialRemarks && (
-                <div className="p-3 border border-red-500/20 bg-card rounded-lg">
-                  <p className="font-medium text-sm text-red-500">Denial Reason</p>
-                  <p className="text-sm text-muted-foreground">{loan.denialRemarks}</p>
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="font-medium text-sm text-red-800">Denial Reason</p>
+                  <p className="text-sm text-red-700">{loan.denialRemarks}</p>
                 </div>
               )}
             </CardContent>
@@ -705,8 +705,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         </div>
 
         {/* Column 3: Additional Info & Actions */}
-        <div className="flex flex-col h-full space-y-6">
-          <Card className="flex-1">
+        <div className="space-y-6">
+          <Card>
             <CardHeader>
               <CardTitle>Verification Status</CardTitle>
               <CardDescription>Required checks</CardDescription>

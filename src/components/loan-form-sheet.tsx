@@ -66,10 +66,10 @@ const loanFormSchema = z.object({
     .refine((val) => paymentTermOptions.includes(val), {
       message: "Please select a valid payment term.",
     }),
-  loanType: z.enum(loanTypeOptions, {
+  loanType: z.enum(["Cash Advance", "Multi-Purpose", "Emergency"], {
     errorMap: () => ({ message: "Please select a valid loan type." }),
   }),
-  purpose: z.enum(loanPurposeOptions, {
+  purpose: z.enum(["Business Capital", "Bills Payment", "Tuition Fee", "House Renovation", "Medical Expenses", "Travel Expenses"], {
     errorMap: () => ({ message: "Please select a valid purpose." }),
   }),
   remarks: z.string().optional(),

@@ -164,7 +164,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     const dueDate = payment.dueDate;
     const paymentDate = payment.paymentDate;
 
-    if (payment.status === 'paid' && paymentDate) {
+    if (paymentDate) {
       const isLate = differenceInDays(paymentDate, dueDate) > GRACE_PERIOD_DAYS;
       return isLate ? (
         <Badge variant="destructive">Paid (Late)</Badge>
@@ -173,12 +173,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       );
     }
 
-    const isOverdue = differenceInDays(new Date(), dueDate) > GRACE_PERIOD_DAYS;
-    return isOverdue ? (
-      <Badge variant="destructive">Late</Badge>
-    ) : (
-      <Badge variant="outline">Pending</Badge>
-    );
+    return <Badge variant="outline">Pending</Badge>;
   };
 
   const calculatePenalty = (payment: (typeof payments)[0]) => {
@@ -274,7 +269,9 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                         </PopoverContent>
                       </Popover>
                     </TableCell>
-                    <TableCell>{getPaymentStatus(payment)}</TableCell>
+                    <TableCell className="text-center">
+                      {getPaymentStatus(payment)}
+                    </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(payment.amount)}
                     </TableCell>

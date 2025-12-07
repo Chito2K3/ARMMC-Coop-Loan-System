@@ -42,6 +42,7 @@ export interface Payment {
   status: PaymentStatus;
   penalty: number;
   penaltyWaived: boolean;
+  penaltyDenied?: boolean;
 }
 
 // This type is for data coming from Firestore that needs to be serialized

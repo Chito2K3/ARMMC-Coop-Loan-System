@@ -3,16 +3,16 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, where } from 'firebase/firestore';
 import { format } from 'date-fns';
 import type { Loan } from '@/lib/types';
 
-interface ApprovalPanelProps {
+interface ReleasePanelProps {
   onSelectLoan: (loanId: string) => void;
   selectedLoanId: string | null;
 }
 
-export function ApprovalPanel({ onSelectLoan, selectedLoanId }: ApprovalPanelProps) {
+export function ReleasePanel({ onSelectLoan, selectedLoanId }: ReleasePanelProps) {
   const firestore = useFirestore();
 
   const loansQuery = useMemoFirebase(() => {
@@ -22,23 +22,23 @@ export function ApprovalPanel({ onSelectLoan, selectedLoanId }: ApprovalPanelPro
 
   const { data: allLoans } = useCollection<Loan>(loansQuery);
 
-  const pendingLoans = useMemo(() => {
+  const loansForRelease = useMemo(() => {
     if (!allLoans) return [];
-    return allLoans.filter(loan => loan.status === 'pending');
+    return allLoans.filter(loan => loan.status === 'approved');
   }, [allLoans]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>For Approval</CardTitle>
-        <CardDescription>{pendingLoans.length} pending loans</CardDescription>
+        <CardTitle>For Releasing</CardTitle>
+        <CardDescription>{loansForRelease.length} approved loans</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {pendingLoans.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No loans pending approval</p>
+          {loansForRelease.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No loans ready for release</p>
           ) : (
-            pendingLoans.map(loan => (
+            loansForRelease.map(loan => (
               <button
                 key={loan.id}
                 onClick={() => onSelectLoan(loan.id)}
@@ -53,7 +53,7 @@ export function ApprovalPanel({ onSelectLoan, selectedLoanId }: ApprovalPanelPro
                   ₱{loan.amount.toLocaleString()}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Created At: {format(loan.createdAt instanceof Date ? loan.createdAt : loan.createdAt.toDate(), 'MMM dd, yyyy')}
+                  Approved: {format(loan.updatedAt instanceof Date ? loan.updatedAt : loan.updatedAt.toDate(), 'MMM dd, yyyy')}
                 </div>
               </button>
             ))
