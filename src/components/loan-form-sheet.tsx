@@ -132,7 +132,6 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           description: "The loan application is being updated.",
         });
       } else {
-        // Get the next loan number
         const loanNumber = await getNextLoanNumber(firestore);
 
         const newLoan = {
@@ -140,7 +139,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           loanNumber,
           salary: 0,
           status: "pending" as const,
-          bookkeeperChecked: false,
+          bookkeeperChecked: true,
           payrollChecked: false,
           denialRemarks: "",
           createdAt: serverTimestamp(),

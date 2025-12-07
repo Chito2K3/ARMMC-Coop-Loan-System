@@ -59,6 +59,7 @@ import { LoanFormSheet } from './loan-form-sheet';
 import { ExistingLoansCheck } from './existing-loans-check';
 import { LoanComputationDialog } from './loan-computation-dialog';
 import { CollectionSchedule } from './collection-schedule';
+import { useApprovalPanel } from './approval-context';
 
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
@@ -68,7 +69,6 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
   const paymentSchedule: PaymentWrite[] = Array.from(
     { length: loan.paymentTerm },
     (_, i) => {
-      // New simplified logic: due date is the same day of the month as release day, but in future months.
       const dueDate = addMonths(releasedAt, i + 1);
 
       return {
@@ -86,12 +86,19 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
   return paymentSchedule;
 };
 
+interface LoanDetailViewProps {
+  loanId: string;
+  onBack?: () => void;
+}
 
-export function LoanDetailView({ loanId }: { loanId: string }) {
+export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUser();
+  const { showApprovalPanel, showSalaryInputPanel } = useApprovalPanel();
   const [userRole, setUserRole] = React.useState<string | null>(null);
+  const [requirementDialogOpen, setRequirementDialogOpen] = React.useState(false);
+  const [requirementMessage, setRequirementMessage] = React.useState('');
 
   React.useEffect(() => {
     if (user && firestore) {
@@ -120,9 +127,33 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       createdAt: toDate(rawLoan.createdAt) || new Date(),
       updatedAt: toDate(rawLoan.updatedAt) || new Date(),
       releasedAt: toDate(rawLoan.releasedAt) || undefined,
-      loanNumber: rawLoan.loanNumber || 0, // Fallback for existing loans
+      loanNumber: rawLoan.loanNumber || 0,
     };
   }, [rawLoan]);
+
+  React.useEffect(() => {
+    if (!loan || !loanRef || loan.status !== 'pending') return;
+
+    const updates: Partial<LoanWrite> = {};
+    let needsUpdate = false;
+
+    if (!loan.bookkeeperChecked) {
+      updates.bookkeeperChecked = true;
+      needsUpdate = true;
+    }
+
+    if (!loan.payrollChecked && loan.salary > 0) {
+      updates.payrollChecked = true;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      updateDocumentNonBlocking(loanRef, {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }, [loan, loanRef]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
@@ -166,21 +197,18 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       const releasedAtDate = new Date();
       const batch = writeBatch(firestore);
 
-      // 1. Update the loan status and releasedAt timestamp
       batch.update(loanRef, {
         status: 'released',
         releasedAt: Timestamp.fromDate(releasedAtDate),
         updatedAt: serverTimestamp(),
       });
 
-      // 2. Generate and add payment schedule documents to the batch
       const paymentSchedule = generatePaymentSchedule(loan, releasedAtDate);
       paymentSchedule.forEach((payment) => {
         const paymentRef = doc(collection(firestore, 'loans', loanId, 'payments'));
         batch.set(paymentRef, payment);
       });
 
-      // 3. Commit the batch to save all changes at once
       await batch.commit();
 
       toast({
@@ -188,9 +216,9 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
         description: 'The funds have been released and the collection schedule is generated.',
       });
 
-      setComputationDialogOpen(false); // Close the dialog on success
+      setComputationDialogOpen(false);
     } catch (error) {
-      console.error("Error releasing loan: ", error); // Add console log for debugging
+      console.error("Error releasing loan: ", error);
       toast({
         variant: 'destructive',
         title: 'Release Failed',
@@ -232,6 +260,37 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
         description: (error as Error).message,
       });
       setIsSubmitting(false);
+    }
+  };
+
+  const handleApproveClick = () => {
+    if (!loan?.bookkeeperChecked) {
+      setRequirementMessage('Bookkeeper must verify the loan before approval.');
+      setRequirementDialogOpen(true);
+      return;
+    }
+    if (!loan?.payrollChecked) {
+      setRequirementMessage('Payroll Checker must verify the salary before approval.');
+      setRequirementDialogOpen(true);
+      return;
+    }
+    handleUpdate({ status: 'approved' });
+  };
+
+  const handleDenyClick = () => {
+    if (!loan?.payrollChecked) {
+      setRequirementMessage('Payroll Checker must verify the salary before denial.');
+      setRequirementDialogOpen(true);
+      return;
+    }
+    setDenyDialogOpen(true);
+  };
+
+  const handleBackClick = () => {
+    if ((showApprovalPanel || showSalaryInputPanel) && onBack) {
+      onBack();
+    } else {
+      router.push('/');
     }
   };
 
@@ -326,7 +385,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
   };
 
-  const isWorkflowDisabled = ['released', 'fully-paid'].includes(loan.status);
+  const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
   const isPayrollCheckerRole = userRole === 'payrollChecker';
   const isBookkeeperRole = userRole === 'bookkeeper';
   const isApproverRole = userRole === 'approver';
@@ -334,7 +393,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" onClick={() => router.push('/')}>
+        <Button variant="outline" size="icon" onClick={handleBackClick}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -374,19 +433,22 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                     <Input
                       type="number"
                       defaultValue={loan.salary}
-                      onBlur={(e) =>
-                        handleUpdate({ salary: Number(e.target.value) })
-                      }
+                      onBlur={(e) => {
+                        const salaryValue = Number(e.target.value);
+                        handleUpdate({ 
+                          salary: salaryValue,
+                          payrollChecked: salaryValue > 0
+                        });
+                      }}
                       className="h-8 pl-6 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      disabled={isSubmitting || loan.status === 'fully-paid' || (isPayrollCheckerRole && loan.status !== 'pending') || isBookkeeperRole}
+                      disabled={isSubmitting || loan.status === 'fully-paid' || (isPayrollCheckerRole && loan.status !== 'pending') || isBookkeeperRole || isApproverRole}
                     />
                   </div>
                 }
               />
               <InfoItem
                 label="Payment Term"
-                value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''
-                  }`}
+                value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''}`}
               />
               <InfoItem
                 label="Status"
@@ -457,22 +519,25 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
               />
               <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={() => handleUpdate({ status: 'approved' })}
+                  onClick={handleApproveClick}
                   disabled={
                     isSubmitting ||
-                    ['approved', 'released', 'fully-paid'].includes(loan.status) ||
+                    isWorkflowDisabled ||
                     isPayrollCheckerRole ||
                     isBookkeeperRole
                   }
-                  className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
                 >
                   <ThumbsUp className="mr-2 h-4 w-4" /> Approve
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => setDenyDialogOpen(true)}
-                  disabled={isSubmitting || loan.status === 'denied' || isWorkflowDisabled || isPayrollCheckerRole || isBookkeeperRole}
-                  className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
+                  onClick={handleDenyClick}
+                  disabled={
+                    isSubmitting ||
+                    isWorkflowDisabled ||
+                    isPayrollCheckerRole ||
+                    isBookkeeperRole
+                  }
                 >
                   <ThumbsDown className="mr-2 h-4 w-4" /> Deny
                 </Button>
@@ -487,41 +552,11 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
                 <h4 className="font-medium">Checklists</h4>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="bookkeeperChecked">Bookkeeper Checked</Label>
-                  {isApproverRole ? (
-                    <div className="text-sm">{<Check className="h-4 w-4" />}</div>
-                  ) : (
-                    <Button
-                      variant={loan.bookkeeperChecked ? 'default' : 'outline'}
-                      size="icon"
-                      onClick={() =>
-                        handleUpdate({
-                          bookkeeperChecked: !loan.bookkeeperChecked,
-                        })
-                      }
-                      disabled={isSubmitting || isWorkflowDisabled || isPayrollCheckerRole || isBookkeeperRole}
-                      className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
-                    >
-                      {loan.bookkeeperChecked ? <Check /> : <X />}
-                    </Button>
-                  )}
+                  <div className="text-sm">{loan.bookkeeperChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4" />}</div>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="payrollChecked">Payroll Checked</Label>
-                  {isApproverRole ? (
-                    <div className="text-sm">{loan.salary > 0 ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}</div>
-                  ) : (
-                    <Button
-                      variant={loan.payrollChecked ? 'default' : 'outline'}
-                      size="icon"
-                      onClick={() =>
-                        handleUpdate({ payrollChecked: !loan.payrollChecked })
-                      }
-                      disabled={isSubmitting || isWorkflowDisabled || isPayrollCheckerRole || isBookkeeperRole}
-                      className={(isPayrollCheckerRole || isBookkeeperRole) ? 'opacity-40' : ''}
-                    >
-                      {loan.payrollChecked ? <Check /> : <X />}
-                    </Button>
-                  )}
+                  <div className="text-sm">{loan.payrollChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4" />}</div>
                 </div>
               </div>
             </CardContent>
@@ -551,6 +586,21 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
         onOpenChange={setSheetOpen}
         loan={loanSerializable}
       />
+
+      <AlertDialog open={requirementDialogOpen} onOpenChange={setRequirementDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cannot Proceed</AlertDialogTitle>
+            <AlertDialogDescription>
+              {requirementMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={isDenyDialogOpen} onOpenChange={setDenyDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -582,6 +632,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -620,4 +671,3 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     </div>
   );
 }
-

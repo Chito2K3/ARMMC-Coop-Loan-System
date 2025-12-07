@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { Settings, Menu } from "lucide-react";
+import { Settings, Menu, BarChart3 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "./ui/button";
 import { useAuth, useUser, useFirestore } from "@/firebase/provider";
@@ -54,14 +54,21 @@ export function Header() {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      <div className="p-6 flex items-center justify-center">
+      <div className="p-6 flex items-center justify-center border-b border-border">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-foreground">{userName || 'User'}</h2>
           <p className="text-base text-muted-foreground capitalize mt-1">{userRole || 'Loading...'}</p>
         </div>
       </div>
 
-      <div className="flex-1"></div>
+      <div className="flex-1 px-4 py-6 space-y-2">
+        <Link href="/reports" onClick={() => setIsOpen(false)} className="w-full">
+          <Button variant="ghost" className="w-full justify-start">
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Reports
+          </Button>
+        </Link>
+      </div>
 
       <div className="p-6 border-t border-border">
         <Button
