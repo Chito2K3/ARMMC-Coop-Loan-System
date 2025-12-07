@@ -153,32 +153,32 @@ export function LoanComputationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Loan Computation Details</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="w-[90vw] max-w-6xl max-h-[85vh] p-6">
+        <DialogHeader className="mb-4">
+          <DialogTitle className="text-2xl">Loan Computation Details</DialogTitle>
+          <DialogDescription className="text-base">
             A full breakdown of the loan for "{loan.applicantName}".
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 180px)' }}>
           {/* Summary */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Summary</h3>
+          <div className="space-y-6">
+            <h3 className="font-semibold text-xl">Summary</h3>
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
-              <div className="flex justify-between">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">Principal Amount</span>
                 <span className="font-medium">
                   {formatCurrency(computation.principal)}
                 </span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">Payment Term</span>
                 <span className="font-medium">{computation.term} months</span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
                   Monthly Amortization (Principal)
                 </span>
@@ -187,7 +187,7 @@ export function LoanComputationDialog({
                 </span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
                   Total Diminishing Interest
                 </span>
@@ -196,26 +196,26 @@ export function LoanComputationDialog({
                 </span>
               </div>
 
-              <div className="flex justify-between font-semibold">
+              <div className="flex justify-between font-semibold text-base border-t pt-3">
                 <span className="">Total Deductions</span>
-                <span className="text-destructive">
+                <span className="text-orange-500">
                   {formatCurrency(computation.totalDeductions)}
                 </span>
               </div>
 
-              <div className="flex justify-between font-bold text-lg">
+              <div className="flex justify-between font-bold text-lg text-green-600">
                 <span className="">Net Proceeds</span>
-                <span className="text-green-600">
+                <span>
                   {formatCurrency(computation.netProceeds)}
                 </span>
               </div>
             </div>
 
-            <h3 className="font-semibold text-lg pt-4">
+            <h3 className="font-semibold text-xl pt-4">
               First Month Deductions
             </h3>
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
-               <div className="flex justify-between">
+               <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
                   Service Charge (6% per year)
                 </span>
@@ -224,7 +224,7 @@ export function LoanComputationDialog({
                 </span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">Share Capital (1%)</span>
                 <span className="font-medium">
                   {formatCurrency(computation.shareCapital)}
@@ -232,7 +232,7 @@ export function LoanComputationDialog({
               </div>
               
               {computation.term > 1 && (
-                 <div className="flex justify-between">
+                 <div className="flex justify-between text-base">
                   <span className="text-muted-foreground">
                     First Month Amortization
                   </span>
@@ -242,7 +242,7 @@ export function LoanComputationDialog({
                 </div>
               )}
 
-              <div className="flex justify-between">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
                   First Month Interest
                 </span>
@@ -254,29 +254,29 @@ export function LoanComputationDialog({
           </div>
 
           {/* Amortization Schedule */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Amortization Schedule</h3>
-            <ScrollArea className="h-96 w-full rounded-md border">
+          <div className="space-y-6">
+            <h3 className="font-semibold text-xl">Amortization Schedule</h3>
+            <ScrollArea className="h-80 w-full rounded-md border">
               <Table>
                 <TableHeader className="sticky top-0 bg-muted">
                   <TableRow>
-                    <TableHead className="w-[50px]">Month</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead className="text-right">Interest</TableHead>
-                    <TableHead className="text-right">Principal</TableHead>
+                    <TableHead className="w-16 text-sm">Month</TableHead>
+                    <TableHead className="text-right text-sm">Balance</TableHead>
+                    <TableHead className="text-right text-sm">Interest</TableHead>
+                    <TableHead className="text-right text-sm">Principal</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {computation.schedule.map((row) => (
                     <TableRow key={row.month}>
-                      <TableCell className="font-medium">{row.month}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="font-medium text-sm">{row.month}</TableCell>
+                      <TableCell className="text-right text-sm">
                         {formatCurrency(row.beginningBalance)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-sm">
                         {formatCurrency(row.interest)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-sm">
                         {formatCurrency(row.principal)}
                       </TableCell>
                     </TableRow>
@@ -287,8 +287,8 @@ export function LoanComputationDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between flex-row-reverse sm:flex-row">
-           <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2 sm:justify-between flex-row-reverse sm:flex-row pt-4">
+           <Button variant="outline" onClick={() => onOpenChange(false)} className="text-sm px-4 py-1 h-auto">
             Close
           </Button>
           {loan.status === 'approved' && (

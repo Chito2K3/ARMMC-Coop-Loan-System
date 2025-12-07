@@ -15,11 +15,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const [isRoleChecked, setIsRoleChecked] = useState(false);
     const [isAuthorized, setIsAuthorized] = useState(false);
+    const [previousUser, setPreviousUser] = useState<string | null>(null);
+    const [shouldShowContent, setShouldShowContent] = useState(false);
 
     useEffect(() => {
         if (isUserLoading || !user || !firestore) {
             setIsRoleChecked(true);
             setIsAuthorized(false);
+            setShouldShowContent(false);
             return;
         }
 
@@ -33,26 +36,44 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
                 
                 if (!isMounted) return;
 
+                // Check if user just logged in (different from previous user)
+                const isNewLogin = previousUser !== user.uid;
+                
                 if (!querySnapshot.empty) {
                     const role = querySnapshot.docs[0].data().role;
                     const isAdminPath = pathname.startsWith('/admin');
                     const isAdmin = role === 'admin';
                     
-                    if (isAdminPath && !isAdmin) {
+                    if (isNewLogin) {
+                        // On new login, redirect to appropriate home page
+                        setShouldShowContent(false);
+                        if (isAdmin) {
+                            router.push('/admin');
+                        } else {
+                            router.push('/');
+                        }
+                        setIsAuthorized(false);
+                    } else if (isAdminPath && !isAdmin) {
+                        setShouldShowContent(false);
                         router.push('/');
                         setIsAuthorized(false);
                     } else if (!isAdminPath && isAdmin) {
+                        setShouldShowContent(false);
                         router.push('/admin');
                         setIsAuthorized(false);
                     } else {
+                        setShouldShowContent(true);
                         setIsAuthorized(true);
                     }
                 } else {
+                    setShouldShowContent(true);
                     setIsAuthorized(true);
                 }
+                setPreviousUser(user.uid);
             } catch (err) {
                 console.error('Failed to check role:', err);
                 if (isMounted) {
+                    setShouldShowContent(true);
                     setIsAuthorized(true);
                 }
             } finally {
@@ -67,7 +88,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         return () => {
             isMounted = false;
         };
-    }, [user, isUserLoading, firestore, router, pathname]);
+    }, [user, isUserLoading, firestore, router, pathname, previousUser]);
 
     if (isUserLoading || !isRoleChecked) {
         return (
@@ -81,7 +102,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         return <LoginPage />;
     }
 
-    if (!isAuthorized) {
+    if (!shouldShowContent) {
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-background z-50">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

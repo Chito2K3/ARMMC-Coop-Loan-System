@@ -26,7 +26,6 @@ const ROLES: { value: UserRole; label: string }[] = [
   { value: 'bookkeeper', label: 'Bookkeeper' },
   { value: 'payrollChecker', label: 'Payroll Checker' },
   { value: 'approver', label: 'Approver' },
-  { value: 'user', label: 'User' },
 ];
 
 export function AdminDashboard() {
@@ -37,7 +36,7 @@ export function AdminDashboard() {
   const [error, setError] = useState('');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<UserRole>('user');
+  const [role, setRole] = useState<UserRole>('bookkeeper');
   const [isAdding, setIsAdding] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);

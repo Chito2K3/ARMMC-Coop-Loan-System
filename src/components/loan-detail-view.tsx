@@ -235,15 +235,17 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     }
   };
 
-  const InfoItem = ({
-    label,
-    value,
-    isLoading,
-  }: {
-    label: string;
-    value: React.ReactNode;
-    isLoading?: boolean;
-  }) => (
+  const InfoItem = (
+    {
+      label,
+      value,
+      isLoading,
+    }: {
+      label: string;
+      value: React.ReactNode;
+      isLoading?: boolean;
+    }
+  ) => (
     <div className="flex justify-between items-center">
       <p className="text-sm text-muted-foreground">{label}</p>
       {isLoading ? (
@@ -346,7 +348,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="md:col-span-2 lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Loan Details</CardTitle>
@@ -442,7 +444,7 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="md:col-span-2 lg:col-span-1 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Approval Workflow</CardTitle>
@@ -618,5 +620,4 @@ export function LoanDetailView({ loanId }: { loanId: string }) {
     </div>
   );
 }
-
 

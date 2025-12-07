@@ -115,15 +115,15 @@ export function DashboardClient() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Loan Dashboard</h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm md:text-base">
             Manage all loan applications here.
           </p>
         </div>
         {!isLoadingRole && canCreateLoan && (
-          <Button onClick={() => setCreateSheetOpen(true)}>
+          <Button onClick={() => setCreateSheetOpen(true)} className="w-full md:w-auto">
             <PlusCircle className="mr-2 h-4 w-4" />
             Create Loan
           </Button>
@@ -131,108 +131,110 @@ export function DashboardClient() {
       </div>
 
       <Card className="border-border/50 shadow-xl bg-card/50 backdrop-blur-sm">
-        <CardHeader className="px-7">
+        <CardHeader className="px-4 md:px-7">
           <CardTitle>Loan Applications</CardTitle>
           <CardDescription>
             A list of all recent loan applications.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Applicant</TableHead>
-                <TableHead className="hidden sm:table-cell">Status</TableHead>
-                <TableHead className="hidden sm:table-cell text-right">
-                  Amount
-                </TableHead>
-                <TableHead className="hidden md:table-cell text-right">
-                  Created At
-                </TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
-                <>
-                  <TableRow>
-                    <TableCell colSpan={5}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell colSpan={5}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                </>
-              )}
-              {!isLoading && loans && loans.length > 0 ? (
-                loans.map((loan) => (
-                  <TableRow key={loan.id}>
-                    <TableCell>
-                      <div className="font-medium">{loan.applicantName}</div>
-                      <div className="text-sm text-muted-foreground md:hidden">
+        <CardContent className="px-0 md:px-7">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-4 md:pl-0">Applicant</TableHead>
+                  <TableHead className="hidden sm:table-cell">Status</TableHead>
+                  <TableHead className="hidden md:table-cell text-right">
+                    Amount
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">
+                    Created At
+                  </TableHead>
+                  <TableHead className="pr-4 md:pr-0">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading && (
+                  <>
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Skeleton className="h-8 w-full" />
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Skeleton className="h-8 w-full" />
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )}
+                {!isLoading && loans && loans.length > 0 ? (
+                  loans.map((loan) => (
+                    <TableRow key={loan.id}>
+                      <TableCell className="pl-4 md:pl-0">
+                        <div className="font-medium text-sm md:text-base">{loan.applicantName}</div>
+                        <div className="text-xs text-muted-foreground md:hidden">
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "PHP",
+                          }).format(loan.amount)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <StatusBadge status={loan.status} />
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-right">
                         {new Intl.NumberFormat("en-US", {
                           style: "currency",
                           currency: "PHP",
                         }).format(loan.amount)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      <StatusBadge status={loan.status} />
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-right">
-                      {new Intl.NumberFormat("en-US", {
-                        style: "currency",
-                        currency: "PHP",
-                      }).format(loan.amount)}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-right">
-                      {format(loan.createdAt, "PPpp")}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem>
-                            <Link href={`/loan/${loan.id}`} className="w-full h-full">View Details</Link>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                !isLoading && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <p>No loans found.</p>
-                        {!isLoadingRole && canCreateLoan && (
-                          <Button variant="outline" size="sm" onClick={() => setCreateSheetOpen(true)}>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Create Loan
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              )}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-right text-sm">
+                        {format(loan.createdAt, "PPpp")}
+                      </TableCell>
+                      <TableCell className="pr-4 md:pr-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem>
+                              <Link href={`/loan/${loan.id}`} className="w-full h-full">View Details</Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  !isLoading && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <p>No loans found.</p>
+                          {!isLoadingRole && canCreateLoan && (
+                            <Button variant="outline" size="sm" onClick={() => setCreateSheetOpen(true)}>
+                              <PlusCircle className="mr-2 h-4 w-4" />
+                              Create Loan
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
       {!isLoadingRole && canCreateLoan && (
