@@ -115,7 +115,19 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
  * Hook to access core Firebase services and user authentication state.
  * Throws error if core services are not available or used outside provider.
  */
-export const useFirebase = (): FirebaseServicesAndUser => {
+export const useFirebase = (): FirebaseServicesAndUser =\u003e {
+  // During build time (SSR/SSG), return mock values to prevent errors
+  if (typeof window === 'undefined') {
+    return {
+      firebaseApp: null as any,
+      firestore: null as any,
+      auth: null as any,
+      user: null,
+      isUserLoading: true,
+      userError: null,
+    };
+  }
+
   const context = useContext(FirebaseContext);
 
   if (context === undefined) {
