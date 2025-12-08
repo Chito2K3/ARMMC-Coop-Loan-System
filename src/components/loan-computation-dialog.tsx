@@ -123,7 +123,6 @@ export function LoanComputationDialog({
     // For 1-month term, interest is deducted upfront, so it's not paid back in amortization.
     if (term === 1) {
        schedule[0].interest = 0;
-       totalInterest = schedule[0].interest;
     }
 
 
@@ -146,8 +145,12 @@ export function LoanComputationDialog({
   if (!computation) return null;
   
   const handleRelease = async () => {
-    await onRelease();
-    onOpenChange(false);
+    try {
+      await onRelease();
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to release fund:', error);
+    }
   };
 
 

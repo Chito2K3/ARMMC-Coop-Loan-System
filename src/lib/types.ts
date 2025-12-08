@@ -39,10 +39,18 @@ export interface Payment {
   dueDate: Timestamp | Date;
   amount: number;
   paymentDate?: Timestamp | Date;
+  actualAmountPaid?: number;
   status: PaymentStatus;
   penalty: number;
   penaltyWaived: boolean;
   penaltyDenied?: boolean;
+}
+
+export interface PenaltySettings {
+  penaltyAmount: number;
+  gracePeriodDays: number;
+  updatedAt: Timestamp | Date;
+  updatedBy: string;
 }
 
 // This type is for data coming from Firestore that needs to be serialized

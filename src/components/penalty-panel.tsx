@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
-import { collection, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import type { Loan } from '@/lib/types';
 import { differenceInDays } from 'date-fns';
 
@@ -45,11 +45,12 @@ export function PenaltyPanel({ onSelectLoan, selectedLoanId }: PenaltyPanelProps
         if (loan.status === 'released') {
           try {
             const paymentsRef = collection(firestore, 'loans', loan.id, 'payments');
-            const paymentsQuery = query(paymentsRef, where('status', '==', 'pending'));
-            const snapshot = await getDocs(paymentsQuery);
+            const snapshot = await getDocs(paymentsRef);
 
             snapshot.docs.forEach((doc) => {
               const payment = doc.data();
+              if (payment.status !== 'pending') return;
+              
               const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
               
               if (!isNaN(dueDate.getTime())) {

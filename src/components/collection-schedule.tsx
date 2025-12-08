@@ -15,6 +15,7 @@ import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -47,6 +48,7 @@ import {
 
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { getPenaltySettings } from '@/firebase/penalty-service';
 import type { Loan, Payment } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 
@@ -63,11 +65,24 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const PENALTY_AMOUNT = 500;
-const GRACE_PERIOD_DAYS = 3;
-
 export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) {
   const firestore = useFirestore();
+  const [penaltyAmount, setPenaltyAmount] = React.useState(500);
+  const [gracePeriodDays, setGracePeriodDays] = React.useState(3);
+
+  React.useEffect(() => {
+    const loadSettings = async () => {
+      if (!firestore) return;
+      try {
+        const settings = await getPenaltySettings(firestore);
+        setPenaltyAmount(settings.penaltyAmount);
+        setGracePeriodDays(settings.gracePeriodDays);
+      } catch (error) {
+        console.error('Error loading penalty settings:', error);
+      }
+    };
+    loadSettings();
+  }, [firestore]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -77,7 +92,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     );
   }, [firestore, loan.id]);
 
-  const { data: rawPayments, isLoading } = useCollection<Payment>(paymentsQuery);
+  const { data: rawPayments, isLoading, error: paymentsError } = useCollection<Payment>(paymentsQuery);
 
   const payments = React.useMemo(() => {
     if (!rawPayments) return [];
@@ -117,6 +132,21 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
         className: 'bg-green-100 text-green-800 border-green-200'
       });
     }
+  };
+
+  const handleActualAmountChange = (paymentId: string, actualAmount: number) => {
+    if (!firestore) return;
+
+    const paymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
+    updateDocumentNonBlocking(paymentRef, {
+      actualAmountPaid: actualAmount,
+      updatedAt: serverTimestamp(),
+    });
+
+    toast({
+      title: 'Actual Amount Recorded',
+      description: 'Payment amount recorded.',
+    });
   };
   
   const handleWaivePenalty = (paymentId: string) => {
@@ -165,7 +195,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     const paymentDate = payment.paymentDate;
 
     if (paymentDate) {
-      const isLate = differenceInDays(paymentDate, dueDate) > GRACE_PERIOD_DAYS;
+      const isLate = differenceInDays(paymentDate, dueDate) > gracePeriodDays;
       return isLate ? (
         <Badge variant="destructive">Paid (Late)</Badge>
       ) : (
@@ -177,17 +207,31 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   };
 
   const calculatePenalty = (payment: (typeof payments)[0]) => {
-    if (payment.penaltyWaived || payment.penaltyDenied) return 0;
+    if (payment.penaltyWaived) return 0;
     
     const dueDate = payment.dueDate;
     const paymentDate = payment.paymentDate;
     
     if (paymentDate) {
-      const isLate = differenceInDays(paymentDate, dueDate) > GRACE_PERIOD_DAYS;
-      return isLate ? PENALTY_AMOUNT : 0;
+      const isLate = differenceInDays(paymentDate, dueDate) > gracePeriodDays;
+      return isLate ? penaltyAmount : 0;
     } else {
-      const isOverdue = differenceInDays(new Date(), dueDate) > GRACE_PERIOD_DAYS;
-      return isOverdue ? PENALTY_AMOUNT : 0;
+      const isOverdue = differenceInDays(new Date(), dueDate) > gracePeriodDays;
+      return isOverdue ? penaltyAmount : 0;
+    }
+  };
+
+  const getPaymentComparison = (payment: (typeof payments)[0]) => {
+    if (!payment.actualAmountPaid) return null;
+    
+    const difference = Math.round((payment.actualAmountPaid - payment.amount) * 100) / 100;
+    
+    if (Math.abs(difference) < 0.01) {
+      return { label: '✓ Full', color: 'text-green-600' };
+    } else if (difference < 0) {
+      return { label: `⚠️ Short ₱${Math.abs(difference).toLocaleString()}`, color: 'text-orange-600' };
+    } else {
+      return { label: `ℹ️ Change ₱${difference.toLocaleString()}`, color: 'text-blue-600' };
     }
   };
 
@@ -207,13 +251,20 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                 <TableHead className="w-[50px]">#</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Payment Date</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Actual Paid</TableHead>
                 <TableHead className="text-right">Penalty</TableHead>
                 <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
+              {paymentsError && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-destructive">
+                    Failed to load payment schedule.
+                  </TableCell>
+                </TableRow>
+              )}
               {isLoading && (
                 <>
                   <TableRow>
@@ -233,6 +284,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
               )}
               {payments.map((payment) => {
                 const penalty = calculatePenalty(payment);
+                const comparison = getPaymentComparison(payment);
                 return (
                   <TableRow key={payment.id}>
                     <TableCell className="font-medium">
@@ -269,11 +321,31 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                         </PopoverContent>
                       </Popover>
                     </TableCell>
-                    <TableCell className="text-center">
-                      {getPaymentStatus(payment)}
-                    </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(payment.amount)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={payment.actualAmountPaid || ''}
+                          onChange={(e) => {
+                            const value = Number(e.target.value) || 0;
+                            handleActualAmountChange(payment.id, value);
+                          }}
+                          disabled={userRole !== 'bookkeeper' || loan.status === 'fully-paid'}
+                          className={cn(
+                            'w-24 text-right',
+                            userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
+                          )}
+                        />
+                        {comparison && (
+                          <span className={`text-xs font-semibold ${comparison.color}`}>
+                            {comparison.label}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell
                       className={cn('text-right font-medium', penalty > 0 && 'text-destructive')}

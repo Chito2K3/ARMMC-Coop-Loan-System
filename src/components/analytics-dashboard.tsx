@@ -27,7 +27,7 @@ export function AnalyticsDashboard() {
     return query(collection(firestore, 'loans'), orderBy('createdAt', 'desc'));
   }, [firestore]);
 
-  const { data: loans, isLoading: loansLoading } = useCollection<Loan>(loansQuery);
+  const { data: loans, isLoading: loansLoading, error: loansError } = useCollection<Loan>(loansQuery);
 
   const metrics = useMemo(() => {
     if (!loans) return null;
@@ -88,6 +88,19 @@ export function AnalyticsDashboard() {
       monthlyData,
     };
   }, [loans]);
+
+  if (loansError) {
+    return (
+      <Card className="border-destructive">
+        <CardHeader>
+          <CardTitle className="text-destructive">Error Loading Analytics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Failed to load loan data. Please try again later.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (loansLoading || !metrics) {
     return (

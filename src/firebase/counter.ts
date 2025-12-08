@@ -22,9 +22,6 @@ export async function getNextLoanNumber(firestore: Firestore): Promise<number> {
         return 1;
     } catch (error) {
         console.error("Error getting next loan number:", error);
-        // Fallback to timestamp-based or random if query fails, or just throw
-        // For now, we'll return 1 to allow creation to proceed if it's the first one
-        // or if there's an index issue (though single field index should exist)
-        return 1;
+        throw new Error(`Failed to generate loan number: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }

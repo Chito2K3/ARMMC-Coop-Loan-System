@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useFirestore, useUser } from '@/firebase/provider';
 import { getAllUsers, updateUserRole, deleteUser, UserProfile, UserRole } from '@/firebase/user-service';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Trash2, Loader2, Plus } from 'lucide-react';
+import { Trash2, Loader2, Plus, Settings } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 
 const ROLES: { value: UserRole; label: string }[] = [
@@ -29,6 +30,7 @@ const ROLES: { value: UserRole; label: string }[] = [
 ];
 
 export function AdminDashboard() {
+  const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUser();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -92,7 +94,8 @@ export function AdminDashboard() {
 
       setEmail('');
       setName('');
-      setRole('user');
+      setRole('bookkeeper');
+      setError('');
     } catch (err) {
       console.error('Failed to add user:', err);
       setError('Failed to add user');
@@ -105,9 +108,11 @@ export function AdminDashboard() {
     try {
       await updateUserRole(firestore, userId, newRole);
       setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      setError('');
     } catch (err) {
       console.error('Failed to update role:', err);
       setError('Failed to update user role');
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -125,6 +130,7 @@ export function AdminDashboard() {
       setUsers(users.filter(u => u.id !== userToDelete));
       setDeleteDialogOpen(false);
       setUserToDelete(null);
+      setError('');
     } catch (err) {
       console.error('Failed to delete user:', err);
       setError('Failed to delete user');
@@ -143,6 +149,16 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end mb-4">
+        <Button
+          onClick={() => router.push('/admin/settings')}
+          variant="outline"
+          className="gap-2"
+        >
+          <Settings className="h-4 w-4" />
+          Penalty Settings
+        </Button>
+      </div>
       <Card className="border-border/50 shadow-xl bg-card/50 backdrop-blur-sm">
         <CardHeader className="px-7">
           <CardTitle>Add New User</CardTitle>
@@ -216,6 +232,11 @@ export function AdminDashboard() {
           <CardDescription>Manage users and their roles in the system.</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md mb-4">
+              {error}
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>

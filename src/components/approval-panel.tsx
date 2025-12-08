@@ -20,7 +20,7 @@ export function ApprovalPanel({ onSelectLoan, selectedLoanId }: ApprovalPanelPro
     return query(collection(firestore, 'loans'), orderBy('createdAt', 'desc'));
   }, [firestore]);
 
-  const { data: allLoans } = useCollection<Loan>(loansQuery);
+  const { data: allLoans, error: loansError } = useCollection<Loan>(loansQuery);
 
   const pendingLoans = useMemo(() => {
     if (!allLoans) return [];
@@ -35,6 +35,9 @@ export function ApprovalPanel({ onSelectLoan, selectedLoanId }: ApprovalPanelPro
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
+          {loansError && (
+            <p className="text-center text-destructive py-8">Failed to load loans</p>
+          )}
           {pendingLoans.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">No loans pending approval</p>
           ) : (

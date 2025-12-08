@@ -3,24 +3,23 @@
 import { useUser } from '@/firebase/provider';
 import { useAuth } from '@/firebase/provider';
 import { Button } from '@/components/ui/button';
-import { LogOut, BarChart3, CheckCircle2, DollarSign, AlertCircle, AlertTriangle, Banknote } from 'lucide-react';
+import { LogOut, BarChart3, Home, Settings } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, where, getDocs } from 'firebase/firestore';
-import { differenceInDays } from 'date-fns';
+import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { useFirestore } from '@/firebase/provider';
 import { useCollection, useMemoFirebase } from '@/firebase';
-import Link from 'next/link';
-import type { Loan } from '@/lib/types';
 import { useApprovalPanel } from './approval-context';
+import Link from 'next/link';
+import { differenceInDays } from 'date-fns';
+import type { Loan } from '@/lib/types';
 
 export function Sidebar() {
   const { user } = useUser();
   const auth = useAuth();
   const firestore = useFirestore();
-  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowPastDuePanel, setShowPenaltyPanel, setShowReleasePanel } = useApprovalPanel();
+  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowReleasePanel, setShowPenaltyPanel } = useApprovalPanel();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
-  const [pastDueCount, setPastDueCount] = useState(0);
   const [penaltyCount, setPenaltyCount] = useState(0);
 
   useEffect(() => {
@@ -28,10 +27,9 @@ export function Sidebar() {
       const fetchUserData = async () => {
         try {
           const usersRef = collection(firestore, 'users');
-          const q = query(usersRef, where('email', '==', user.email));
-          const querySnapshot = await getDocs(q);
-          if (!querySnapshot.empty) {
-            const userData = querySnapshot.docs[0].data();
+          const snapshot = await getDocs(usersRef);
+          const userData = snapshot.docs.find(doc => doc.data().email === user.email)?.data();
+          if (userData) {
             setUserName(userData.name);
             setUserRole(userData.role);
           }
@@ -48,67 +46,49 @@ export function Sidebar() {
     return query(collection(firestore, 'loans'), orderBy('createdAt', 'desc'));
   }, [firestore]);
 
-  const { data: loans } = useCollection<Loan>(loansQuery);
+  const { data: allLoans } = useCollection<Loan>(loansQuery);
+
+  const approvalCount = useMemo(() => {
+    if (!allLoans) return 0;
+    return allLoans.filter(loan => loan.status === 'pending').length;
+  }, [allLoans]);
+
+  const salaryCount = useMemo(() => {
+    if (!allLoans) return 0;
+    return allLoans.filter(loan => loan.status === 'pending' && (!loan.salary || loan.salary === 0)).length;
+  }, [allLoans]);
+
+  const releaseCount = useMemo(() => {
+    if (!allLoans) return 0;
+    return allLoans.filter(loan => loan.status === 'approved').length;
+  }, [allLoans]);
 
   useEffect(() => {
-    const calculatePastDue = async () => {
-      if (!loans || !firestore) {
-        setPastDueCount(0);
-        return;
-      }
-
-      const today = new Date();
-      let count = 0;
-
-      for (const loan of loans) {
-        if (loan.status === 'released') {
-          try {
-            const paymentsRef = collection(firestore, 'loans', loan.id, 'payments');
-            const paymentsQuery = query(paymentsRef, where('status', '==', 'pending'));
-            const snapshot = await getDocs(paymentsQuery);
-
-            snapshot.docs.forEach((doc) => {
-              const payment = doc.data();
-              const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
-              if (!isNaN(dueDate.getTime()) && dueDate < today && !payment.paymentDate) {
-                count++;
-              }
-            });
-          } catch (err) {
-            console.error(`Error fetching payments for loan ${loan.id}:`, err);
-          }
-        }
-      }
-
-      setPastDueCount(count);
-    };
-
-    calculatePastDue();
-  }, [loans, firestore]);
-
-  useEffect(() => {
-    const calculatePenalties = async () => {
-      if (!loans || !firestore || userRole !== 'approver') {
+    const fetchPenalties = async () => {
+      if (!allLoans || !firestore) {
         setPenaltyCount(0);
         return;
       }
 
-      const today = new Date();
       let count = 0;
-
-      for (const loan of loans) {
+      for (const loan of allLoans) {
         if (loan.status === 'released') {
           try {
             const paymentsRef = collection(firestore, 'loans', loan.id, 'payments');
-            const paymentsQuery = query(paymentsRef, where('status', '==', 'pending'));
-            const snapshot = await getDocs(paymentsQuery);
+            const snapshot = await getDocs(paymentsRef);
 
             snapshot.docs.forEach((doc) => {
               const payment = doc.data();
+              if (payment.status !== 'pending') return;
+              
               const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
+              
               if (!isNaN(dueDate.getTime())) {
+                const today = new Date();
                 const isOverdue = differenceInDays(today, dueDate) > 3;
-                if (isOverdue && !payment.penaltyWaived && !payment.penaltyDenied) {
+                const penalty = isOverdue && !payment.penaltyWaived && !payment.penaltyDenied ? 500 : 0;
+
+                if (penalty > 0) {
                   count++;
                 }
               }
@@ -122,23 +102,8 @@ export function Sidebar() {
       setPenaltyCount(count);
     };
 
-    calculatePenalties();
-  }, [loans, firestore, userRole]);
-
-  const pendingApprovalCount = useMemo(() => {
-    if (!loans || userRole !== 'approver') return 0;
-    return loans.filter(loan => loan.status === 'pending').length;
-  }, [loans, userRole]);
-
-  const salaryInputCount = useMemo(() => {
-    if (!loans || userRole !== 'payrollChecker') return 0;
-    return loans.filter(loan => loan.status === 'pending' && (!loan.salary || loan.salary === 0)).length;
-  }, [loans, userRole]);
-
-  const releaseCount = useMemo(() => {
-    if (!loans || userRole !== 'bookkeeper') return 0;
-    return loans.filter(loan => loan.status === 'approved').length;
-  }, [loans, userRole]);
+    fetchPenalties();
+  }, [allLoans, firestore]);
 
   const handleLogout = async () => {
     try {
@@ -158,95 +123,54 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 px-4 py-6 space-y-2">
+        {userRole === 'admin' && (
+          <Link href="/admin" className="w-full block">
+            <Button variant="ghost" className="w-full justify-start">
+              <Home className="h-4 w-4 mr-2" />
+              Admin Dashboard
+            </Button>
+          </Link>
+        )}
+        <Link href="/" className="w-full block">
+          <Button variant="ghost" className="w-full justify-start">
+            <Home className="h-4 w-4 mr-2" />
+            Dashboard
+          </Button>
+        </Link>
         <Link href="/reports" className="w-full block">
           <Button variant="ghost" className="w-full justify-start">
             <BarChart3 className="h-4 w-4 mr-2" />
             Reports
           </Button>
         </Link>
-        {userRole === 'approver' && (
-          <div className="relative inline-block w-full">
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              onClick={() => setShowApprovalPanel(true)}
-            >
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-              For Approval
+        {userRole === 'admin' && (
+          <Link href="/admin/settings" className="w-full block">
+            <Button variant="ghost" className="w-full justify-start">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
             </Button>
-            {pendingApprovalCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-                {pendingApprovalCount}
-              </span>
-            )}
-          </div>
+          </Link>
         )}
-        {userRole === 'approver' && (
-          <div className="relative inline-block w-full">
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              onClick={() => setShowPenaltyPanel(true)}
-            >
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Waive Penalty
-            </Button>
-            {penaltyCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-                {penaltyCount}
-              </span>
-            )}
-          </div>
-        )}
-        {userRole === 'payrollChecker' && (
-          <div className="relative inline-block w-full">
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              onClick={() => setShowSalaryInputPanel(true)}
-            >
-              <DollarSign className="h-4 w-4 mr-2" />
-              Input Salary
-            </Button>
-            {salaryInputCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-                {salaryInputCount}
-              </span>
-            )}
-          </div>
-        )}
-        {userRole === 'bookkeeper' && (
-          <div className="relative inline-block w-full">
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              onClick={() => setShowReleasePanel(true)}
-            >
-              <Banknote className="h-4 w-4 mr-2" />
-              For Releasing
-            </Button>
-            {releaseCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-                {releaseCount}
-              </span>
-            )}
-          </div>
-        )}
-        <div className="relative inline-block w-full">
-          <Button
-            variant="ghost"
-            className="w-full justify-start"
-            onClick={() => setShowPastDuePanel(true)}
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Past Due
+        {(userRole === 'approver' || userRole === 'admin') && (
+          <Button variant="outline" className="w-full justify-start" onClick={() => setShowApprovalPanel(true)}>
+            For Approval {approvalCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
           </Button>
-          {pastDueCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-              {pastDueCount}
-            </span>
-          )}
-        </div>
+        )}
+        {(userRole === 'payrollChecker' || userRole === 'admin') && (
+          <Button variant="outline" className="w-full justify-start" onClick={() => setShowSalaryInputPanel(true)}>
+            Input Salary {salaryCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{salaryCount}</span>}
+          </Button>
+        )}
+        {(userRole === 'bookkeeper' || userRole === 'admin') && (
+          <Button variant="outline" className="w-full justify-start" onClick={() => setShowReleasePanel(true)}>
+            For Releasing {releaseCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{releaseCount}</span>}
+          </Button>
+        )}
+        {(userRole === 'approver' || userRole === 'admin') && (
+          <Button variant="outline" className="w-full justify-start" onClick={() => setShowPenaltyPanel(true)}>
+            Waive Penalty {penaltyCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{penaltyCount}</span>}
+          </Button>
+        )}
       </div>
 
       <div className="p-6 border-t border-border">

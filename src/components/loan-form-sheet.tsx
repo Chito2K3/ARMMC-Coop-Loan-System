@@ -175,12 +175,12 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg flex flex-col">
-        <SheetHeader>
-          <SheetTitle>
-            {isEditMode ? "Edit Loan" : "New Loan Application"}
+      <SheetContent className="w-full sm:max-w-2xl flex flex-col">
+        <SheetHeader className="pb-6">
+          <SheetTitle className="text-2xl">
+            {isEditMode ? "Edit Loan Application" : "New Loan Application"}
           </SheetTitle>
-          <SheetDescription>
+          <SheetDescription className="text-base">
             {isEditMode
               ? "Update the details of the loan application."
               : "Fill out the form to create a new loan application."}
@@ -194,16 +194,20 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
             className="flex-1 flex flex-col min-h-0"
           >
             <ScrollArea className="flex-1 pr-6 -mr-6">
-              <div className="space-y-6 py-4">
+              <div className="space-y-8 py-4 pr-6">
                 {/* Applicant Name */}
                 <FormField
                   control={form.control}
                   name="applicantName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Applicant Name</FormLabel>
+                      <FormLabel className="text-base font-semibold">Applicant Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Juan Dela Cruz" {...field} />
+                        <Input 
+                          placeholder="Juan Dela Cruz" 
+                          className="h-11 text-base"
+                          {...field} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -216,16 +220,16 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Loan Amount</FormLabel>
+                      <FormLabel className="text-base font-semibold">Loan Amount</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
                             ₱
                           </span>
                           <Input
                             type="number"
                             placeholder="5000"
-                            className="pl-7 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="pl-10 h-11 text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             {...field}
                           />
                         </div>
@@ -235,34 +239,66 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                   )}
                 />
 
-                {/* Loan Type */}
-                <FormField
-                  control={form.control}
-                  name="loanType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Type of Loan</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a loan type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {loanTypeOptions.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Loan Type */}
+                  <FormField
+                    control={form.control}
+                    name="loanType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">Type of Loan</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 text-base">
+                              <SelectValue placeholder="Select a loan type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {loanTypeOptions.map((type) => (
+                              <SelectItem key={type} value={type} className="text-base">
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Payment Term */}
+                  <FormField
+                    control={form.control}
+                    name="paymentTerm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">Payment Term (Months)</FormLabel>
+                        <Select
+                          onValueChange={(val) => field.onChange(Number(val))}
+                          defaultValue={String(field.value)}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 text-base">
+                              <SelectValue placeholder="Select a payment term" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentTermOptions.map((term) => (
+                              <SelectItem key={term} value={String(term)} className="text-base">
+                                {term} month{term > 1 ? "s" : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 {/* Purpose */}
                 <FormField
@@ -270,49 +306,20 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                   name="purpose"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Purpose</FormLabel>
+                      <FormLabel className="text-base font-semibold">Purpose</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-11 text-base">
                             <SelectValue placeholder="Select a purpose" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {loanPurposeOptions.map((purpose) => (
-                            <SelectItem key={purpose} value={purpose}>
+                            <SelectItem key={purpose} value={purpose} className="text-base">
                               {purpose}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Payment Term */}
-                <FormField
-                  control={form.control}
-                  name="paymentTerm"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Term (Months)</FormLabel>
-                      <Select
-                        onValueChange={(val) => field.onChange(Number(val))}
-                        defaultValue={String(field.value)}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a payment term" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {paymentTermOptions.map((term) => (
-                            <SelectItem key={term} value={String(term)}>
-                              {term} month{term > 1 ? "s" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -328,11 +335,11 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                   name="remarks"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Remarks (Optional)</FormLabel>
+                      <FormLabel className="text-base font-semibold">Remarks (Optional)</FormLabel>
                       <FormControl>
                         <Textarea
                           placeholder="Enter any relevant remarks"
-                          className="resize-none"
+                          className="resize-none min-h-24 text-base"
                           {...field}
                         />
                       </FormControl>
@@ -344,16 +351,21 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
             </ScrollArea>
 
             {/* Footer */}
-            <SheetFooter>
+            <SheetFooter className="pt-6 border-t mt-6">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                className="h-11 px-6 text-base"
               >
                 Cancel
               </Button>
 
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button 
+                type="submit" 
+                disabled={form.formState.isSubmitting}
+                className="h-11 px-8 text-base"
+              >
                 {form.formState.isSubmitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (

@@ -1,20 +1,76 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Helper function to check if user has a specific role
+    function hasRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    
+    // Helper function to check if user has any of the specified roles
+    function hasAnyRole(roles) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in roles;
+    }
+    
+    // Users collection - protect role field from unauthorized changes
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      // Anyone authenticated can read user documents
+      allow read: if request.auth != null;
+      
+      // Prevent users from changing their own role or deleting users
+      allow update: if request.auth != null && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+      
+      // Only allow user creation (for new sign-ups via AuthGuard)
+      allow create: if request.auth != null;
+      
+      // Prevent deletion from client side
+      allow delete: if false;
     }
 
+    // Loans collection - role-based access
     match /loans/{loanId} {
-      allow read, write: if request.auth != null;
-
+      // All authenticated users can read loans
+      allow read: if request.auth != null;
+      
+      // Only bookkeepers and admins can create loans
+      allow create: if request.auth != null && hasAnyRole(['admin', 'bookkeeper']);
+      
+      // Bookkeepers, approvers, and admins can update loans
+      allow update: if request.auth != null && hasAnyRole(['admin', 'bookkeeper', 'approver', 'payrollChecker']);
+      
+      // Only admins can delete loans
+      allow delete: if request.auth != null && hasRole('admin');
+      
+      // Payments subcollection
       match /payments/{paymentId} {
-        allow read, write: if request.auth != null;
+        // All authenticated users can read payments
+        allow read: if request.auth != null;
+        
+        // Bookkeepers and admins can create/update payments
+        allow create, update: if request.auth != null && hasAnyRole(['admin', 'bookkeeper']);
+        
+        // Only admins can delete payments
+        allow delete: if request.auth != null && hasRole('admin');
       }
     }
 
+    // Counters collection - for auto-incrementing loan numbers
     match /counters/{counterId} {
-      allow read, write: if request.auth != null;
+      // All authenticated users can read counters
+      allow read: if request.auth != null;
+      
+      // Only bookkeepers and admins can update counters
+      allow write: if request.auth != null && hasAnyRole(['admin', 'bookkeeper']);
+    }
+
+    // Settings collection - for penalty settings
+    match /settings/{document=**} {
+      // All authenticated users can read settings
+      allow read: if request.auth != null;
+      
+      // Only admins can update settings
+      allow write: if request.auth != null && hasRole('admin');
     }
   }
 }

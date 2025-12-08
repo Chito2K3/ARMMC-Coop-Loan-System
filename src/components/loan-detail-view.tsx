@@ -425,9 +425,9 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
-  const isPayrollCheckerRole = userRole === 'payrollChecker';
-  const isBookkeeperRole = userRole === 'bookkeeper';
-  const isApproverRole = userRole === 'approver';
+  const isPayrollCheckerRole = userRole === 'payrollChecker' || userRole === 'admin';
+  const isBookkeeperRole = userRole === 'bookkeeper' || userRole === 'admin';
+  const isApproverRole = userRole === 'approver' || userRole === 'admin';
 
   return (
     <div className="space-y-6">
@@ -452,7 +452,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         {/* Column 1: Basic Information */}
         <div className="flex flex-col h-full space-y-6">
-          <Card className="flex-1">
+          <Card className="flex-1 border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
               <CardDescription>Core loan details</CardDescription>
@@ -476,7 +476,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle>Management</CardTitle>
               <CardDescription>Edit and manage loan</CardDescription>
@@ -487,7 +487,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                 variant="outline"
                 className="w-full"
                 onClick={() => setSheetOpen(true)}
-                disabled={loan.status === 'fully-paid' || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+                disabled={userRole === 'admin' ? false : loan.status === 'fully-paid' || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
               >
                 <FilePenLine className="h-4 w-4 mr-2" />
                 Edit Loan
@@ -497,7 +497,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                 size="sm"
                 className="w-full"
                 onClick={() => setDeleteDialogOpen(true)}
-                disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+                disabled={isSubmitting || userRole !== 'admin'}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Loan
@@ -508,7 +508,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
 
         {/* Column 2: Workflow Progress */}
         <div className="flex flex-col h-full space-y-6">
-          <Card className="flex-1">
+          <Card className="flex-1 border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle>Workflow Progress</CardTitle>
               <CardDescription>Current status: <StatusBadge status={loan.status} /></CardDescription>
@@ -588,7 +588,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           </Card>
 
           {/* Current Action Card */}
-          <Card>
+          <Card className="border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle>Current Action</CardTitle>
               <CardDescription>What needs to be done next</CardDescription>
@@ -706,7 +706,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
 
         {/* Column 3: Additional Info & Actions */}
         <div className="flex flex-col h-full space-y-6">
-          <Card className="flex-1">
+          <Card className="flex-1 border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle>Verification Status</CardTitle>
               <CardDescription>Required checks</CardDescription>
@@ -733,7 +733,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle>Loan History</CardTitle>
               <CardDescription>Important dates</CardDescription>
@@ -821,8 +821,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              loan application and remove its data from our servers.
+              This action cannot be undone. This will permanently delete the loan application, all associated payments, and remove all data from our servers.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
