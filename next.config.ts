@@ -1,7 +1,6 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'export',  // Enable static export for Firebase Hosting
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
@@ -10,7 +9,6 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
-    unoptimized: true,  // Required for static export
     remotePatterns: [
       {
         protocol: 'https',
