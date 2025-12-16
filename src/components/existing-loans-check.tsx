@@ -26,6 +26,7 @@ interface PaymentMetrics {
   totalActivePenalties: number;
   totalPenaltiesWaived: number;
   totalPenaltiesDenied: number;
+  penaltiesDeniedCount: number; // Added for count-based logic
   underpaymentCount: number;
   totalUnderpaymentAmount: number;
   complianceRate: number;
@@ -42,9 +43,8 @@ interface RiskLevel {
   explanation: string;
 }
 
-const calculatePaymentMetrics = (payments: Payment[]): PaymentMetrics => {
+const calculatePaymentMetrics = (payments: Payment[], gracePeriodDays: number): PaymentMetrics => {
   const now = new Date();
-  const GRACE_PERIOD_DAYS = 3;
 
   let paidOnTime = 0;
   let latePayments = 0;
@@ -53,51 +53,48 @@ const calculatePaymentMetrics = (payments: Payment[]): PaymentMetrics => {
   let totalActivePenalties = 0;
   let totalPenaltiesWaived = 0;
   let totalPenaltiesDenied = 0;
+  let penaltiesDeniedCount = 0;
   let underpaymentCount = 0;
   let totalUnderpaymentAmount = 0;
   let evaluatedPayments = 0;
 
   payments.forEach((payment) => {
+    // ... existing date logic ...
     const dueDate = payment.dueDate instanceof Date ? payment.dueDate : (payment.dueDate as Timestamp).toDate();
     const paymentDate = payment.paymentDate ? (payment.paymentDate instanceof Date ? payment.paymentDate : (payment.paymentDate as Timestamp).toDate()) : null;
     const daysUntilDue = differenceInDays(dueDate, now);
 
-    // Only evaluate payments where due date has passed or is within grace period
-    if (daysUntilDue <= GRACE_PERIOD_DAYS) {
+    if (daysUntilDue <= gracePeriodDays) {
       evaluatedPayments++;
 
       if (paymentDate) {
         const daysDifference = differenceInDays(paymentDate, dueDate);
-        if (daysDifference < GRACE_PERIOD_DAYS) {
+        if (daysDifference <= gracePeriodDays) {
           paidOnTime++;
         } else {
           latePayments++;
         }
       } else {
         const daysOverdue = differenceInDays(now, dueDate);
-        if (daysOverdue > GRACE_PERIOD_DAYS) {
+        if (daysOverdue > gracePeriodDays) {
           pastDuePayments++;
           totalPastDueAmount += payment.amount;
         }
       }
     }
 
-    // Count underpayments
     if (payment.actualAmountPaid && payment.actualAmountPaid < payment.amount) {
       underpaymentCount++;
       totalUnderpaymentAmount += payment.amount - payment.actualAmountPaid;
     }
 
-    // Count penalties: only active penalties (not waived or denied)
-    if (payment.penalty && payment.penalty > 0) {
-      if (payment.penaltyWaived) {
-        totalPenaltiesWaived += payment.penalty;
-      } else if (payment.penaltyDenied) {
-        totalPenaltiesDenied += payment.penalty;
-      } else {
-        // Active penalty (not waived, not denied)
-        totalActivePenalties += payment.penalty;
-      }
+    if (payment.penaltyWaived) {
+      totalPenaltiesWaived += (payment.penalty || 0);
+    } else if (payment.penaltyDenied) {
+      totalPenaltiesDenied += (payment.penalty || 500);
+      penaltiesDeniedCount++; // Track count
+    } else if (payment.penalty && payment.penalty > 0) {
+      totalActivePenalties += payment.penalty;
     }
   });
 
@@ -113,6 +110,7 @@ const calculatePaymentMetrics = (payments: Payment[]): PaymentMetrics => {
     totalActivePenalties,
     totalPenaltiesWaived,
     totalPenaltiesDenied,
+    penaltiesDeniedCount,
     underpaymentCount,
     totalUnderpaymentAmount,
     complianceRate,
@@ -134,8 +132,9 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
     };
   }
 
-  // High: 3+ late payments OR active penalties denied OR compliance < 50%
-  if (metrics.latePayments >= 3 || metrics.totalPenaltiesDenied > 0 || metrics.complianceRate < 50) {
+  // High: 3+ late payments OR 3+ deferred penalties OR compliance < 50%
+  // Changed logic: Needs 3+ deferred penalties to be high risk
+  if (metrics.latePayments >= 3 || metrics.penaltiesDeniedCount >= 3 || metrics.complianceRate < 50) {
     return {
       level: "high",
       label: "High",
@@ -144,12 +143,13 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
       textColor: "text-orange-700",
       badgeColor: "bg-orange-500 text-white",
       icon: <AlertTriangle className="h-5 w-5 text-orange-600" />,
-      explanation: "Multiple late payments or deferred penalties. Elevated risk.",
+      explanation: "Multiple late payments or frequently deferred penalties. Elevated risk.",
     };
   }
 
-  // Medium: 1-2 late payments OR active penalties OR compliance 50-80%
-  if (metrics.latePayments >= 1 || metrics.totalActivePenalties > 0 || metrics.complianceRate < 80) {
+  // Medium: 1-2 late payments OR active penalties OR 1-2 deferred penalties OR compliance 50-80%
+  // Changed logic: 1-2 deferred penalties is now Medium risk
+  if (metrics.latePayments >= 1 || metrics.totalActivePenalties > 0 || metrics.penaltiesDeniedCount >= 1 || metrics.complianceRate < 80) {
     return {
       level: "medium",
       label: "Medium",
@@ -158,11 +158,11 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
       textColor: "text-amber-700",
       badgeColor: "bg-amber-500 text-white",
       icon: <AlertCircle className="h-5 w-5 text-amber-600" />,
-      explanation: "Some late payments or active penalties. Moderate risk.",
+      explanation: "Some late payments, deferred penalties, or active penalties. Moderate risk.",
     };
   }
 
-  // Low: No issues (no past due, no late payments, no active penalties)
+  // Low: No issues
   return {
     level: "low",
     label: "Low",
@@ -175,6 +175,8 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
   };
 };
 
+import { getPenaltySettings } from '@/firebase/penalty-service';
+
 export function ExistingLoansCheck({
   applicantName,
   currentLoanId,
@@ -182,6 +184,20 @@ export function ExistingLoansCheck({
   const firestore = useFirestore();
   const [paymentMetrics, setPaymentMetrics] = React.useState<PaymentMetrics | null>(null);
   const [isLoadingPayments, setIsLoadingPayments] = React.useState(false);
+  const [gracePeriod, setGracePeriod] = React.useState(3); // Default to 3, will update
+
+  React.useEffect(() => {
+    const fetchSettings = async () => {
+      if (!firestore) return;
+      try {
+        const settings = await getPenaltySettings(firestore);
+        setGracePeriod(settings.gracePeriodDays);
+      } catch (e) {
+        console.error('Failed to load penalty settings:', e);
+      }
+    };
+    fetchSettings();
+  }, [firestore]);
 
   const shouldQuery = !!(firestore && applicantName);
 
@@ -223,7 +239,7 @@ export function ExistingLoansCheck({
           });
         }
 
-        const metrics = calculatePaymentMetrics(allPayments);
+        const metrics = calculatePaymentMetrics(allPayments, gracePeriod);
         setPaymentMetrics(metrics);
       } catch (error) {
         console.error("Error fetching payment history:", error);
@@ -234,7 +250,7 @@ export function ExistingLoansCheck({
     };
 
     fetchPaymentHistory();
-  }, [firestore, existingLoans]);
+  }, [firestore, existingLoans, gracePeriod]);
 
   if (!shouldQuery) {
     return null;
