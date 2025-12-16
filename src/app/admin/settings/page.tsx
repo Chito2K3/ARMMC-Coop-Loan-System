@@ -156,7 +156,7 @@ export default function AdminSettingsPage() {
               {settings && (
                 <div className="pt-4 border-t space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Last updated: {new Date(settings.updatedAt instanceof Date ? settings.updatedAt : settings.updatedAt).toLocaleString()}
+                    Last updated: {settings.updatedAt instanceof Date ? settings.updatedAt.toLocaleString() : (settings.updatedAt as any).toDate?.().toLocaleString() || new Date(settings.updatedAt as any).toLocaleString()}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Updated by: {settings.updatedBy}

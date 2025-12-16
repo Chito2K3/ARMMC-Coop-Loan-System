@@ -60,19 +60,19 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
       try {
         const userRef = doc(firestore, 'users', user.uid);
         let userSnap = await getDoc(userRef);
-        
+
         if (!userSnap.exists()) {
           const usersRef = collection(firestore, 'users');
           const q = query(usersRef, where('email', '==', user.email));
           const querySnapshot = await getDocs(q);
-          
+
           if (!querySnapshot.empty) {
-            userSnap = querySnapshot.docs[0];
+            userSnap = querySnapshot.docs[0] as any;
           }
         }
-        
+
         if (userSnap.exists()) {
-          setUserRole(userSnap.data().role);
+          setUserRole(userSnap.data()?.role);
         }
       } catch (err) {
         console.error('Failed to fetch user role:', err);
@@ -128,7 +128,7 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
     };
   }, [loans]);
 
-  const canCreateLoan = userRole !== 'payrollChecker' && userRole !== 'approver' || userRole === 'admin';
+  const canCreateLoan = userRole === 'admin' || userRole === 'bookkeeper';
   const showPanel = showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel;
 
   if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel) && selectedLoanId) {

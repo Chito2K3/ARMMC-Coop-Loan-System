@@ -33,16 +33,19 @@ export function Header() {
       try {
         const userRef = doc(firestore, 'users', user.uid);
         let userSnap = await getDoc(userRef);
-        
+
         if (!userSnap.exists()) {
           const usersRef = collection(firestore, 'users');
           const snapshot = await getDocs(usersRef);
-          userSnap = snapshot.docs.find(doc => doc.data().email === user.email);
+          const foundDoc = snapshot.docs.find(doc => doc.data().email === user.email);
+          if (foundDoc) {
+            userSnap = foundDoc as any;
+          }
         }
-        
+
         if (userSnap?.exists()) {
-          setUserRole(userSnap.data().role);
-          setUserName(userSnap.data().name);
+          setUserRole(userSnap.data()?.role);
+          setUserName(userSnap.data()?.name);
         }
       } catch (err) {
         console.error('Failed to fetch user role:', err);
@@ -91,9 +94,9 @@ export function Header() {
             snapshot.docs.forEach((doc) => {
               const payment = doc.data();
               if (payment.status !== 'pending') return;
-              
+
               const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
-              
+
               if (!isNaN(dueDate.getTime())) {
                 const today = new Date();
                 const isOverdue = differenceInDays(today, dueDate) > 3;

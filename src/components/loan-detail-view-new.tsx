@@ -71,24 +71,42 @@ import { useApprovalPanel } from './approval-context';
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
 
-  const monthlyPrincipal = loan.amount / loan.paymentTerm;
+  const principal = loan.amount;
+  const term = loan.paymentTerm;
+  const interestRate = 0.015; // 1.5% diminishing
 
-  const paymentSchedule: PaymentWrite[] = Array.from(
-    { length: loan.paymentTerm },
-    (_, i) => {
-      const dueDate = addMonths(releasedAt, i + 1);
+  const monthlyPrincipalPayment = Math.floor(principal / term);
+  let beginningBalance = principal;
+  let totalPrincipalPaid = 0;
 
-      return {
-        loanId: loan.id,
-        paymentNumber: i + 1,
-        dueDate: Timestamp.fromDate(dueDate),
-        amount: monthlyPrincipal,
-        status: 'pending',
-        penalty: 0,
-        penaltyWaived: false,
-      };
+  const paymentSchedule: PaymentWrite[] = [];
+
+  for (let i = 0; i < term; i++) {
+    const month = i + 1;
+    const interest = beginningBalance * interestRate;
+
+    let principalPayment = monthlyPrincipalPayment;
+    // Adjust last payment to ensure total principal is exact
+    if (month === term) {
+      principalPayment = principal - totalPrincipalPaid;
     }
-  );
+
+    const totalAmount = principalPayment + interest;
+    const dueDate = addMonths(releasedAt, month);
+
+    paymentSchedule.push({
+      loanId: loan.id,
+      paymentNumber: month,
+      dueDate: Timestamp.fromDate(dueDate),
+      amount: totalAmount,
+      status: 'pending',
+      penalty: 0,
+      penaltyWaived: false,
+    });
+
+    beginningBalance -= principalPayment;
+    totalPrincipalPaid += principalPayment;
+  }
 
   return paymentSchedule;
 };
@@ -176,7 +194,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         const paymentsRef = collection(firestore, 'loans', loanId, 'payments');
         const paymentsQuery = query(paymentsRef, orderBy('paymentNumber', 'asc'));
         const snapshot = await getDocs(paymentsQuery);
-        
+
         if (snapshot.empty) return;
 
         const releasedAtDate = loan.releasedAt instanceof Date ? loan.releasedAt : (loan.releasedAt as any).toDate();
@@ -516,12 +534,10 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             <CardContent className="space-y-6">
               {/* Progress Timeline */}
               <div className="space-y-4">
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${
-                  loan.status === 'pending' ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'
-                }`}>
-                  <ClipboardCheck className={`h-5 w-5 ${
-                    ['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
-                  }`} />
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'
+                  }`}>
+                  <ClipboardCheck className={`h-5 w-5 ${['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
+                    }`} />
                   <div className="flex-1">
                     <p className="font-medium text-sm">Created</p>
                     <p className="text-xs text-muted-foreground">{format(loan.createdAt, 'PP')}</p>
@@ -529,12 +545,10 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                   {['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
                 </div>
 
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${
-                  loan.status === 'pending' && (!loan.salary || loan.salary === 0) ? 'bg-yellow-50 border border-yellow-200' : 'bg-muted/50'
-                }`}>
-                  <DollarSign className={`h-5 w-5 ${
-                    loan.payrollChecked ? 'text-green-500' : 'text-yellow-500'
-                  }`} />
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && (!loan.salary || loan.salary === 0) ? 'bg-yellow-50 border border-yellow-200' : 'bg-muted/50'
+                  }`}>
+                  <DollarSign className={`h-5 w-5 ${loan.payrollChecked ? 'text-green-500' : 'text-yellow-500'
+                    }`} />
                   <div className="flex-1">
                     <p className="font-medium text-sm">Salary Input</p>
                     <p className="text-xs text-muted-foreground">
@@ -544,30 +558,26 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                   {loan.payrollChecked && <Check className="h-4 w-4 text-green-500" />}
                 </div>
 
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${
-                  loan.status === 'pending' && loan.payrollChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'
-                }`}>
-                  <ThumbsUp className={`h-5 w-5 ${
-                    ['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 
-                    loan.status === 'denied' ? 'text-red-500' : 'text-muted-foreground'
-                  }`} />
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.payrollChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'
+                  }`}>
+                  <ThumbsUp className={`h-5 w-5 ${['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' :
+                      loan.status === 'denied' ? 'text-red-500' : 'text-muted-foreground'
+                    }`} />
                   <div className="flex-1">
                     <p className="font-medium text-sm">Approval</p>
                     <p className="text-xs text-muted-foreground">
-                      {loan.status === 'approved' ? 'Approved' : 
-                       loan.status === 'denied' ? 'Denied' : 'Pending approval'}
+                      {loan.status === 'approved' ? 'Approved' :
+                        loan.status === 'denied' ? 'Denied' : 'Pending approval'}
                     </p>
                   </div>
                   {['approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
                   {loan.status === 'denied' && <X className="h-4 w-4 text-red-500" />}
                 </div>
 
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${
-                  loan.status === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-muted/50'
-                }`}>
-                  <Banknote className={`h-5 w-5 ${
-                    ['released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
-                  }`} />
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-muted/50'
+                  }`}>
+                  <Banknote className={`h-5 w-5 ${['released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
+                    }`} />
                   <div className="flex-1">
                     <p className="font-medium text-sm">Fund Release</p>
                     <p className="text-xs text-muted-foreground">
@@ -608,7 +618,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                       onBlur={(e) => {
                         const salaryValue = Number(e.target.value) || 0;
                         if (salaryValue !== loan.salary) {
-                          handleUpdate({ 
+                          handleUpdate({
                             salary: salaryValue,
                             payrollChecked: salaryValue > 0
                           });
@@ -715,8 +725,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               <div className="flex items-center justify-between">
                 <Label>Bookkeeper Verified</Label>
                 <div className="text-sm">
-                  {loan.bookkeeperChecked ? 
-                    <Check className="h-4 w-4 text-green-500" /> : 
+                  {loan.bookkeeperChecked ?
+                    <Check className="h-4 w-4 text-green-500" /> :
                     <X className="h-4 w-4 text-muted-foreground" />
                   }
                 </div>
@@ -724,8 +734,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               <div className="flex items-center justify-between">
                 <Label>Payroll Verified</Label>
                 <div className="text-sm">
-                  {loan.payrollChecked ? 
-                    <Check className="h-4 w-4 text-green-500" /> : 
+                  {loan.payrollChecked ?
+                    <Check className="h-4 w-4 text-green-500" /> :
                     <X className="h-4 w-4 text-muted-foreground" />
                   }
                 </div>
