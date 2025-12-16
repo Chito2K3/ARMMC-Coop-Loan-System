@@ -6,6 +6,7 @@ import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import type { Loan } from '@/lib/types';
 import { differenceInDays } from 'date-fns';
+import { getPenaltySettings } from '@/firebase/penalty-service';
 
 interface PenaltyItem {
   loanId: string;
@@ -39,6 +40,14 @@ export function PenaltyPanel({ onSelectLoan, selectedLoanId }: PenaltyPanelProps
         return;
       }
 
+      let gracePeriod = 3;
+      try {
+        const settings = await getPenaltySettings(firestore);
+        gracePeriod = settings.gracePeriodDays;
+      } catch (e) {
+        console.error('Failed to load penalty settings:', e);
+      }
+
       const penaltyList: PenaltyItem[] = [];
 
       for (const loan of loans) {
@@ -49,13 +58,21 @@ export function PenaltyPanel({ onSelectLoan, selectedLoanId }: PenaltyPanelProps
 
             snapshot.docs.forEach((doc) => {
               const payment = doc.data();
-              if (payment.status !== 'pending') return;
-              
+              // Logic: Include if 'pending' AND overdue, OR 'paid' AND paid late
+
               const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
-              
+
               if (!isNaN(dueDate.getTime())) {
                 const today = new Date();
-                const isOverdue = differenceInDays(today, dueDate) > 3;
+                let isOverdue = false;
+
+                if (payment.status === 'paid' && payment.paymentDate) {
+                  const paymentDate = payment.paymentDate?.toDate?.() || new Date(payment.paymentDate);
+                  isOverdue = differenceInDays(paymentDate, dueDate) > gracePeriod;
+                } else if (payment.status === 'pending') {
+                  isOverdue = differenceInDays(today, dueDate) > gracePeriod;
+                }
+
                 const penalty = isOverdue && !payment.penaltyWaived && !payment.penaltyDenied ? 500 : 0;
 
                 if (penalty > 0) {
@@ -97,11 +114,10 @@ export function PenaltyPanel({ onSelectLoan, selectedLoanId }: PenaltyPanelProps
               <button
                 key={`${penalty.loanId}-${penalty.paymentId}`}
                 onClick={() => onSelectLoan(penalty.loanId)}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                  selectedLoanId === penalty.loanId
+                className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedLoanId === penalty.loanId
                     ? 'bg-primary/10 border-primary'
                     : 'border-border hover:bg-accent'
-                }`}
+                  }`}
               >
                 <div className="font-medium">{penalty.applicantName}</div>
                 <div className="text-sm text-muted-foreground">

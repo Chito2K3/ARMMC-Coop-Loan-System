@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/s
 import { useCollection, useMemoFirebase } from '@/firebase';
 import { useApprovalPanel } from './approval-context';
 import { differenceInDays } from 'date-fns';
+import { getPenaltySettings } from '@/firebase/penalty-service';
 import type { Loan } from '@/lib/types';
 
 export function Header() {
@@ -84,6 +85,14 @@ export function Header() {
         return;
       }
 
+      let gracePeriod = 3;
+      try {
+        const settings = await getPenaltySettings(firestore);
+        gracePeriod = settings.gracePeriodDays;
+      } catch (e) {
+        console.error('Failed to load penalty settings:', e);
+      }
+
       let count = 0;
       for (const loan of allLoans) {
         if (loan.status === 'released') {
@@ -93,13 +102,19 @@ export function Header() {
 
             snapshot.docs.forEach((doc) => {
               const payment = doc.data();
-              if (payment.status !== 'pending') return;
-
               const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
 
               if (!isNaN(dueDate.getTime())) {
                 const today = new Date();
-                const isOverdue = differenceInDays(today, dueDate) > 3;
+                let isOverdue = false;
+
+                if (payment.status === 'paid' && payment.paymentDate) {
+                  const paymentDate = payment.paymentDate?.toDate?.() || new Date(payment.paymentDate);
+                  isOverdue = differenceInDays(paymentDate, dueDate) > gracePeriod;
+                } else if (payment.status === 'pending') {
+                  isOverdue = differenceInDays(today, dueDate) > gracePeriod;
+                }
+
                 const penalty = isOverdue && !payment.penaltyWaived && !payment.penaltyDenied ? 500 : 0;
 
                 if (penalty > 0) {
@@ -159,22 +174,22 @@ export function Header() {
         )}
         {(userRole === 'approver' || userRole === 'admin') && (
           <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowApprovalPanel(true); }}>
-            For Approval {approvalCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
+            For Approval {approvalCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
           </Button>
         )}
         {(userRole === 'payrollChecker' || userRole === 'admin') && (
           <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowSalaryInputPanel(true); }}>
-            Input Salary {salaryCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{salaryCount}</span>}
+            Input Salary {salaryCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{salaryCount}</span>}
           </Button>
         )}
         {(userRole === 'bookkeeper' || userRole === 'admin') && (
           <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowReleasePanel(true); }}>
-            For Releasing {releaseCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{releaseCount}</span>}
+            For Releasing {releaseCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{releaseCount}</span>}
           </Button>
         )}
         {(userRole === 'approver' || userRole === 'admin') && (
           <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowPenaltyPanel(true); }}>
-            Waive Penalty {penaltyCount > 0 && <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">{penaltyCount}</span>}
+            Waive Penalty {penaltyCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{penaltyCount}</span>}
           </Button>
         )}
       </div>

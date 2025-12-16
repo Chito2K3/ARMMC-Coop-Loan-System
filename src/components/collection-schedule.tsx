@@ -117,7 +117,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       title: 'Payment Date Updated',
       description: 'The payment has been marked as paid.',
     });
-    
+
     const allPaid = payments.every(p => {
       if (p.id === paymentId) return true;
       return p.status === 'paid';
@@ -148,7 +148,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       description: 'Payment amount recorded.',
     });
   };
-  
+
   const handleWaivePenalty = (paymentId: string) => {
     if (!firestore) return;
     const paymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
@@ -156,6 +156,11 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       penaltyWaived: true,
       updatedAt: serverTimestamp(),
     });
+
+    // Touch loan to trigger sidebar refresh
+    const loanRef = doc(firestore, 'loans', loan.id);
+    updateDocumentNonBlocking(loanRef, { updatedAt: serverTimestamp() });
+
     toast({
       title: 'Penalty Waived',
       description: 'The penalty for this payment has been waived.',
@@ -168,7 +173,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     if (!currentPayment) return;
 
     const penalty = calculatePenalty(currentPayment);
-    
+
     const currentPaymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
     updateDocumentNonBlocking(currentPaymentRef, {
       penaltyDenied: true,
@@ -188,6 +193,10 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       title: 'Penalty Deferred',
       description: 'The penalty has been carried over to the next payment.',
     });
+
+    // Touch loan to trigger sidebar refresh
+    const loanRef = doc(firestore, 'loans', loan.id);
+    updateDocumentNonBlocking(loanRef, { updatedAt: serverTimestamp() });
   };
 
   const getPaymentStatus = (payment: (typeof payments)[0]) => {
@@ -208,10 +217,10 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
 
   const calculatePenalty = (payment: (typeof payments)[0]) => {
     if (payment.penaltyWaived) return 0;
-    
+
     const dueDate = payment.dueDate;
     const paymentDate = payment.paymentDate;
-    
+
     if (paymentDate) {
       const isLate = differenceInDays(paymentDate, dueDate) > gracePeriodDays;
       return isLate ? penaltyAmount : 0;
@@ -223,9 +232,9 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
 
   const getPaymentComparison = (payment: (typeof payments)[0]) => {
     if (!payment.actualAmountPaid) return null;
-    
+
     const difference = Math.round((payment.actualAmountPaid - payment.amount) * 100) / 100;
-    
+
     if (Math.abs(difference) < 0.01) {
       return { label: '✓ Full', color: 'text-green-600' };
     } else if (difference < 0) {
