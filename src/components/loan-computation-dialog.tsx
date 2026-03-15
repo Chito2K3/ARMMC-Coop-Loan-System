@@ -69,19 +69,29 @@ export function LoanComputationDialog({
     let beginningBalance = principal;
     let totalInterest = 0;
     
-    // Use integer arithmetic for principal amortization to avoid floating point issues
-    const monthlyPrincipalPayment = Math.floor(principal / term);
+    // We drop the simple Math.floor(principal/term) because we will calculate principal dynamically per month based on a rounded total payment.
+    const approximateMonthlyPrincipalPayment = principal / term;
     let totalPrincipalPaid = 0;
 
     for (let month = 1; month <= term; month++) {
       const interest = beginningBalance * interestRate;
       totalInterest += interest;
 
-      let principalPayment = monthlyPrincipalPayment;
+      let principalPayment = 0;
+      let totalMonthlyPayment = 0;
 
-      // On the last month, adjust the principal to make sure it sums to the total principal
       if (month === term) {
+        // Last month: The principal payment is exactly whatever balance is remaining. 
         principalPayment = principal - totalPrincipalPaid;
+        totalMonthlyPayment = principalPayment + interest;
+      } else {
+        // Normal month: Total Payment must be a clean, whole Peso.
+        // Get exact theoretically perfect total, then round it to nearest integer.
+        const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
+        totalMonthlyPayment = Math.round(exactTotalPayment);
+        
+        // Principal is whatever is left over after satisfying the exact interest portion
+        principalPayment = totalMonthlyPayment - interest;
       }
       
       const endingBalance = beginningBalance - principalPayment;
@@ -98,7 +108,8 @@ export function LoanComputationDialog({
       totalPrincipalPaid += principalPayment;
     }
     
-    const monthlyAmortizationPrincipal = Math.round((principal / term) * 100) / 100;
+    // Average out the first month amortization to show in the UI summary
+    const monthlyAmortizationPrincipal = Math.round(schedule[0]?.principal * 100) / 100 || 0;
 
     // Fees calculation
     const loanTermInYears = term / 12;
@@ -122,9 +133,8 @@ export function LoanComputationDialog({
     
     // For 1-month term, interest is deducted upfront, so it's not paid back in amortization.
     if (term === 1) {
-       schedule[0].interest = 0;
+      schedule[0].interest = 0;
     }
-
 
     return {
       principal,
@@ -160,17 +170,17 @@ export function LoanComputationDialog({
         <DialogHeader className="mb-4">
           <DialogTitle className="text-2xl">Loan Computation Details</DialogTitle>
           <DialogDescription className="text-base">
-            A full breakdown of the loan for "{loan.applicantName}".
+            A full breakdown of the loan for {loan.applicantName}.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 180px)' }}>
           {/* Summary */}
           <div className="space-y-6">
-            <h3 className="font-semibold text-xl">Summary</h3>
+            <h3 className="font-semibold text-xl">Loan Summary</h3>
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
               <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">Principal Amount</span>
+                <span className="text-muted-foreground">Loan Amount</span>
                 <span className="font-medium">
                   {formatCurrency(computation.principal)}
                 </span>
@@ -182,9 +192,10 @@ export function LoanComputationDialog({
               </div>
 
               <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">
-                  Monthly Amortization (Principal)
-                </span>
+                <div>
+                  <span className="text-muted-foreground">Monthly Principal Portion</span>
+                  <p className="text-xs text-muted-foreground">(excludes monthly interest)</p>
+                </div>
                 <span className="font-medium">
                   {formatCurrency(computation.monthlyAmortization)}
                 </span>
@@ -192,10 +203,17 @@ export function LoanComputationDialog({
 
               <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
-                  Total Diminishing Interest
+                  Interest Rate
+                </span>
+                <span className="font-medium">1.5% per month (diminishing)</span>
+              </div>
+
+              <div className="flex justify-between text-base">
+                <span className="text-muted-foreground">
+                  Total Interest Over Term
                 </span>
                 <span className="font-medium">
-                  {formatCurrency(computation.firstMonthInterest)}
+                  {formatCurrency(computation.totalInterest)}
                 </span>
               </div>
 
@@ -215,7 +233,7 @@ export function LoanComputationDialog({
             </div>
 
             <h3 className="font-semibold text-xl pt-4">
-              First Month Deductions
+              Loan Deductions
             </h3>
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
                <div className="flex justify-between text-base">
@@ -234,20 +252,9 @@ export function LoanComputationDialog({
                 </span>
               </div>
               
-              {computation.term > 1 && (
-                 <div className="flex justify-between text-base">
-                  <span className="text-muted-foreground">
-                    First Month Amortization
-                  </span>
-                  <span className="font-medium">
-                    {formatCurrency(computation.firstMonthAmortization)}
-                  </span>
-                </div>
-              )}
-
               <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
-                  First Month Interest
+                  First Month Interest (1.5%)
                 </span>
                 <span className="font-medium">
                   {formatCurrency(computation.firstMonthInterest)}
@@ -256,17 +263,23 @@ export function LoanComputationDialog({
             </div>
           </div>
 
-          {/* Amortization Schedule */}
+          {/* Monthly Payment Schedule */}
           <div className="space-y-6">
-            <h3 className="font-semibold text-xl">Amortization Schedule</h3>
+            <div>
+              <h3 className="font-semibold text-xl">Monthly Payment Schedule</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Total monthly deduction: Principal + Interest (1.5% per month on remaining balance)
+              </p>
+            </div>
             <ScrollArea className="h-80 w-full rounded-md border">
               <Table>
                 <TableHeader className="sticky top-0 bg-muted">
                   <TableRow>
                     <TableHead className="w-16 text-sm">Month</TableHead>
-                    <TableHead className="text-right text-sm">Balance</TableHead>
-                    <TableHead className="text-right text-sm">Interest</TableHead>
-                    <TableHead className="text-right text-sm">Principal</TableHead>
+                    <TableHead className="text-right text-sm">Beginning Balance</TableHead>
+                    <TableHead className="text-right text-sm">Monthly Interest</TableHead>
+                    <TableHead className="text-right text-sm">Principal Payment</TableHead>
+                    <TableHead className="text-right text-sm font-bold text-primary">Total Monthly Payment</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,6 +294,9 @@ export function LoanComputationDialog({
                       </TableCell>
                       <TableCell className="text-right text-sm">
                         {formatCurrency(row.principal)}
+                      </TableCell>
+                      <TableCell className="text-right text-sm font-bold text-primary">
+                        {formatCurrency(row.principal + row.interest)}
                       </TableCell>
                     </TableRow>
                   ))}

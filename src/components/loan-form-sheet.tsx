@@ -59,7 +59,7 @@ const loanFormSchema = z.object({
     message: "Applicant name must be at least 2 characters.",
   }),
   amount: z.coerce
-    .number({ invalid_type_error: "Please enter a valid number." })
+    .number({ message: "Please enter a valid number." })
     .positive("Loan amount must be positive."),
   paymentTerm: z.coerce
     .number()
@@ -67,10 +67,10 @@ const loanFormSchema = z.object({
       message: "Please select a valid payment term.",
     }),
   loanType: z.enum(["Cash Advance", "Multi-Purpose", "Emergency"], {
-    errorMap: () => ({ message: "Please select a valid loan type." }),
+    message: "Please select a valid loan type.",
   }),
   purpose: z.enum(["Business Capital", "Bills Payment", "Tuition Fee", "House Renovation", "Medical Expenses", "Travel Expenses"], {
-    errorMap: () => ({ message: "Please select a valid purpose." }),
+    message: "Please select a valid purpose.",
   }),
   remarks: z.string().optional(),
 });
@@ -123,7 +123,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     try {
       if (isEditMode && loan) {
         const loanRef = doc(firestore, "loans", loan.id);
-        updateDocumentNonBlocking(loanRef, {
+        await updateDocumentNonBlocking(loanRef, {
           ...data,
           updatedAt: serverTimestamp(),
         });
@@ -146,7 +146,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           updatedAt: serverTimestamp(),
         };
 
-        const docRefPromise = addDocumentNonBlocking(
+        const docRef = await addDocumentNonBlocking(
           collection(firestore, "loans"),
           newLoan
         );
@@ -156,8 +156,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           description: "The new loan application has been saved.",
         });
 
-        const docRef = await docRefPromise;
-        if (docRef && docRef.id) {
+        if (docRef?.id) {
           router.push(`/loan/${docRef.id}`);
         }
       }
@@ -165,10 +164,11 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       onOpenChange(false);
       form.reset();
     } catch (error) {
+      console.error('Error submitting loan:', error);
       toast({
         variant: "destructive",
         title: "An error occurred",
-        description: (error as Error).message,
+        description: error instanceof Error ? error.message : 'Failed to submit loan',
       });
     }
   }

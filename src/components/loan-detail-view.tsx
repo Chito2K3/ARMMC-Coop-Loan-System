@@ -58,7 +58,7 @@ import {
   deleteDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { getOrCreateUser } from '@/firebase/user-service';
+import { getUser } from '@/firebase/user-service';
 import { toast } from '@/hooks/use-toast';
 import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
 import { StatusBadge } from './status-badge';
@@ -109,7 +109,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
 
   React.useEffect(() => {
     if (user && firestore) {
-      getOrCreateUser(firestore, user.uid, user.email || '', user.displayName || '')
+      getUser(firestore, user.uid, user.email || '', user.displayName || '')
         .then(profile => setUserRole(profile?.role || null))
         .catch(() => setUserRole(null));
     }
@@ -196,7 +196,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     };
 
     regeneratePaymentSchedule();
-  }, [loan?.releasedAt, firestore, loanId, loan?.status]);
+  }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
@@ -223,6 +223,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         description: 'The loan application is being updated.',
       });
     } catch (error) {
+      console.error('Error updating loan:', error);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
@@ -329,14 +330,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     setDenyDialogOpen(true);
   };
 
-  const handleBackClick = () => {
-    if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel) && onBack) {
-      onBack();
-    } else {
-      router.push('/');
-    }
-  };
-
   const InfoItem = (
     {
       label,
@@ -425,9 +418,15 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
-  const isPayrollCheckerRole = userRole === 'payrollChecker' || userRole === 'admin';
-  const isBookkeeperRole = userRole === 'bookkeeper' || userRole === 'admin';
-  const isApproverRole = userRole === 'approver' || userRole === 'admin';
+  const isAdmin = userRole === 'admin';
+  const isPayrollCheckerRole = userRole === 'payrollChecker' || isAdmin;
+  const isBookkeeperRole = userRole === 'bookkeeper' || isAdmin;
+  const isApproverRole = userRole === 'approver' || isAdmin;
+
+  const handleBackClick = () => {
+    if (onBack) onBack();
+    else router.push('/');
+  };
 
   return (
     <div className="space-y-6">
@@ -628,6 +627,14 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               {loan.status === 'pending' && loan.payrollChecked && (
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Approval Required</p>
+                  <Button
+                    variant="outline"
+                    className="w-full mb-2"
+                    onClick={() => setComputationDialogOpen(true)}
+                  >
+                    <Calculator className="mr-2 h-4 w-4" />
+                    View Computation Details
+                  </Button>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
