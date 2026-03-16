@@ -26,13 +26,10 @@ export async function initiateEmailSignIn(authInstance: Auth, email: string, pas
 /** Initiate Google sign-in using redirect. */
 export async function signInWithGoogle(authInstance: Auth) {
   const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({
-    prompt: 'select_account'
-  });
+  provider.setCustomParameters({ prompt: 'select_account' });
 
   try {
-    const result = await signInWithRedirect(authInstance, provider);
-    return result;
+    await signInWithRedirect(authInstance, provider);
   } catch (error: any) {
     console.error('Google Sign-In Error:', error);
     console.error('Error code:', error.code);

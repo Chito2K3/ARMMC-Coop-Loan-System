@@ -25,7 +25,6 @@ import { LoanFormSheet } from './loan-form-sheet';
 import { ApprovalPanel } from './approval-panel';
 import { SalaryInputPanel } from './salary-input-panel';
 import { PastDuePanel } from './past-due-panel';
-import { PenaltyPanel } from './penalty-panel';
 import { ReleasePanel } from './release-panel';
 import { LoanDetailView } from './loan-detail-view';
 import { format } from 'date-fns';
@@ -42,7 +41,7 @@ interface DashboardClientProps {
 export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel }: DashboardClientProps) {
   const firestore = useFirestore();
   const { user } = useUser();
-  const { showSalaryInputPanel, setShowSalaryInputPanel, showPastDuePanel, setShowPastDuePanel, showPenaltyPanel, setShowPenaltyPanel, showReleasePanel, setShowReleasePanel } = useApprovalPanel();
+  const { showSalaryInputPanel, setShowSalaryInputPanel, showPastDuePanel, setShowPastDuePanel, showReleasePanel, setShowReleasePanel } = useApprovalPanel();
   const [isCreateSheetOpen, setCreateSheetOpen] = React.useState(false);
   const [userRole, setUserRole] = React.useState<string | null>(null);
   const [isLoadingRole, setIsLoadingRole] = React.useState(true);
@@ -85,10 +84,10 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
   }, [user, firestore]);
 
   React.useEffect(() => {
-    if (showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel) {
+    if (showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel) {
       setSelectedLoanId(null);
     }
-  }, [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showPenaltyPanel, showReleasePanel]);
+  }, [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel]);
 
   const loansQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -129,9 +128,9 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
   }, [loans]);
 
   const canCreateLoan = userRole === 'admin' || userRole === 'bookkeeper';
-  const showPanel = showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel;
+  const showPanel = showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel;
 
-  if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel) && selectedLoanId) {
+  if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel) && selectedLoanId) {
     return <LoanDetailView loanId={selectedLoanId} onBack={() => setSelectedLoanId(null)} />;
   }
 
@@ -139,7 +138,6 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
     onShowApprovalPanel?.(false);
     setShowSalaryInputPanel(false);
     setShowPastDuePanel(false);
-    setShowPenaltyPanel(false);
     setShowReleasePanel(false);
   };
 
@@ -167,9 +165,7 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
               {showPastDuePanel && (
                 <PastDuePanel onSelectLoan={setSelectedLoanId} selectedLoanId={selectedLoanId} />
               )}
-              {showPenaltyPanel && (
-                <PenaltyPanel onSelectLoan={setSelectedLoanId} selectedLoanId={selectedLoanId} />
-              )}
+
               {showReleasePanel && (
                 <ReleasePanel onSelectLoan={setSelectedLoanId} selectedLoanId={selectedLoanId} />
               )}

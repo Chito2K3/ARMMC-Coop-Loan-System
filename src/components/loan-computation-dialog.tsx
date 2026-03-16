@@ -16,6 +16,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -301,6 +302,16 @@ export function LoanComputationDialog({
                     </TableRow>
                   ))}
                 </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-right font-medium">Total</TableCell>
+                    <TableCell className="text-right font-bold text-primary">
+                      {formatCurrency(
+                        computation.schedule.reduce((total, row) => total + row.principal + row.interest, 0)
+                      )}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
               </Table>
             </ScrollArea>
           </div>

@@ -23,10 +23,6 @@ interface PaymentMetrics {
   latePayments: number;
   pastDuePayments: number;
   totalPastDueAmount: number;
-  totalActivePenalties: number;
-  totalPenaltiesWaived: number;
-  totalPenaltiesDenied: number;
-  penaltiesDeniedCount: number; // Added for count-based logic
   underpaymentCount: number;
   totalUnderpaymentAmount: number;
   complianceRate: number;
@@ -50,21 +46,16 @@ const calculatePaymentMetrics = (payments: Payment[], gracePeriodDays: number): 
   let latePayments = 0;
   let pastDuePayments = 0;
   let totalPastDueAmount = 0;
-  let totalActivePenalties = 0;
-  let totalPenaltiesWaived = 0;
-  let totalPenaltiesDenied = 0;
-  let penaltiesDeniedCount = 0;
   let underpaymentCount = 0;
   let totalUnderpaymentAmount = 0;
   let evaluatedPayments = 0;
 
   payments.forEach((payment) => {
-    // ... existing date logic ...
     const dueDate = payment.dueDate instanceof Date ? payment.dueDate : (payment.dueDate as Timestamp).toDate();
     const paymentDate = payment.paymentDate ? (payment.paymentDate instanceof Date ? payment.paymentDate : (payment.paymentDate as Timestamp).toDate()) : null;
     const daysUntilDue = differenceInDays(dueDate, now);
 
-    if (daysUntilDue <= gracePeriodDays) {
+    if (paymentDate || daysUntilDue <= gracePeriodDays) {
       evaluatedPayments++;
 
       if (paymentDate) {
@@ -88,13 +79,8 @@ const calculatePaymentMetrics = (payments: Payment[], gracePeriodDays: number): 
       totalUnderpaymentAmount += payment.amount - payment.actualAmountPaid;
     }
 
-    if (payment.penaltyWaived) {
-      totalPenaltiesWaived += (payment.penalty || 0);
-    } else if (payment.penaltyDenied) {
-      totalPenaltiesDenied += (payment.penalty || 500);
-      penaltiesDeniedCount++; // Track count
-    } else if (payment.penalty && payment.penalty > 0) {
-      totalActivePenalties += payment.penalty;
+    if (payment.monthly_penalty && payment.monthly_penalty > 0) {
+      // Logic for tracking metrics if needed, but for now we skip legacy trackers
     }
   });
 
@@ -107,10 +93,6 @@ const calculatePaymentMetrics = (payments: Payment[], gracePeriodDays: number): 
     latePayments,
     pastDuePayments,
     totalPastDueAmount,
-    totalActivePenalties,
-    totalPenaltiesWaived,
-    totalPenaltiesDenied,
-    penaltiesDeniedCount,
     underpaymentCount,
     totalUnderpaymentAmount,
     complianceRate,
@@ -134,7 +116,7 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
 
   // High: 3+ late payments OR 3+ deferred penalties OR compliance < 50%
   // Changed logic: Needs 3+ deferred penalties to be high risk
-  if (metrics.latePayments >= 3 || metrics.penaltiesDeniedCount >= 3 || metrics.complianceRate < 50) {
+  if (metrics.latePayments >= 3 || metrics.complianceRate < 50) {
     return {
       level: "high",
       label: "High",
@@ -143,13 +125,13 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
       textColor: "text-orange-700",
       badgeColor: "bg-orange-500 text-white",
       icon: <AlertTriangle className="h-5 w-5 text-orange-600" />,
-      explanation: "Multiple late payments or frequently deferred penalties. Elevated risk.",
+      explanation: "Multiple late payments. Elevated risk.",
     };
   }
 
   // Medium: 1-2 late payments OR active penalties OR 1-2 deferred penalties OR compliance 50-80%
   // Changed logic: 1-2 deferred penalties is now Medium risk
-  if (metrics.latePayments >= 1 || metrics.totalActivePenalties > 0 || metrics.penaltiesDeniedCount >= 1 || metrics.complianceRate < 80) {
+  if (metrics.latePayments >= 1 || metrics.complianceRate < 80) {
     return {
       level: "medium",
       label: "Medium",
@@ -158,7 +140,7 @@ const calculateRiskLevel = (metrics: PaymentMetrics): RiskLevel => {
       textColor: "text-amber-700",
       badgeColor: "bg-amber-500 text-white",
       icon: <AlertCircle className="h-5 w-5 text-amber-600" />,
-      explanation: "Some late payments, deferred penalties, or active penalties. Moderate risk.",
+      explanation: "Some late payments. Moderate risk.",
     };
   }
 
@@ -203,10 +185,12 @@ export function ExistingLoansCheck({
 
   const existingLoansQuery = useMemoFirebase(() => {
     if (!shouldQuery) return null;
+    const loansRef = collection(firestore, "loans");
+    const activeStatuses = ["pending", "approved", "released"];
     return query(
-      collection(firestore, "loans"),
+      loansRef,
       where("applicantName", "==", applicantName),
-      where("status", "in", ["pending", "approved", "released"])
+      where("status", "in", activeStatuses)
     );
   }, [firestore, applicantName, shouldQuery]);
 
@@ -227,17 +211,15 @@ export function ExistingLoansCheck({
     const fetchPaymentHistory = async () => {
       setIsLoadingPayments(true);
       try {
-        const allPayments: Payment[] = [];
-
-        for (const loan of existingLoans) {
+        const paymentPromises = existingLoans.map(async (loan) => {
           const paymentsRef = collection(firestore, "loans", loan.id, "payments");
           const paymentsQuery = query(paymentsRef, orderBy("paymentNumber", "asc"));
           const snapshot = await getDocs(paymentsQuery);
+          return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Payment));
+        });
 
-          snapshot.docs.forEach((doc) => {
-            allPayments.push({ id: doc.id, ...doc.data() } as Payment);
-          });
-        }
+        const paymentArrays = await Promise.all(paymentPromises);
+        const allPayments = paymentArrays.flat();
 
         const metrics = calculatePaymentMetrics(allPayments, gracePeriod);
         setPaymentMetrics(metrics);
@@ -338,30 +320,6 @@ export function ExistingLoansCheck({
                   <p className="font-semibold text-orange-600">{paymentMetrics.latePayments}</p>
                 </div>
               )}
-              {paymentMetrics.pastDuePayments > 0 && (
-                <div className="p-2 bg-background rounded border border-destructive/30">
-                  <p className="text-muted-foreground">Past Due</p>
-                  <p className="font-semibold text-destructive">₱{paymentMetrics.totalPastDueAmount.toLocaleString()}</p>
-                </div>
-              )}
-              {paymentMetrics.totalActivePenalties > 0 && (
-                <div className="p-2 bg-background rounded border border-destructive/30">
-                  <p className="text-muted-foreground">Active Penalties</p>
-                  <p className="font-semibold text-destructive">₱{paymentMetrics.totalActivePenalties.toLocaleString()}</p>
-                </div>
-              )}
-              {paymentMetrics.totalPenaltiesWaived > 0 && (
-                <div className="p-2 bg-background rounded border border-primary/10">
-                  <p className="text-muted-foreground">Penalties Waived</p>
-                  <p className="font-semibold">₱{paymentMetrics.totalPenaltiesWaived.toLocaleString()}</p>
-                </div>
-              )}
-              {paymentMetrics.totalPenaltiesDenied > 0 && (
-                <div className="p-2 bg-background rounded border border-orange-500/30">
-                  <p className="text-muted-foreground">Penalties Deferred</p>
-                  <p className="font-semibold text-orange-600">₱{paymentMetrics.totalPenaltiesDenied.toLocaleString()}</p>
-                </div>
-              )}
               {paymentMetrics.underpaymentCount > 0 && (
                 <div className="p-2 bg-background rounded border border-amber-500/30">
                   <p className="text-muted-foreground">Underpayments</p>
@@ -382,15 +340,15 @@ export function ExistingLoansCheck({
         <div className="pt-2 border-t border-primary/10 space-y-2">
           <p className="text-xs font-semibold text-muted-foreground">Risk Level Definitions (Based on Due Payments):</p>
           <div className="space-y-1 text-xs">
-            <p><span className="font-semibold text-primary">Low:</span> No past due, no late payments, no active penalties</p>
-            <p><span className="font-semibold text-amber-600">Medium:</span> 1-2 late payments OR active penalties OR compliance 50-80%</p>
-            <p><span className="font-semibold text-orange-600">High:</span> 3+ late payments OR deferred penalties OR compliance &lt;50%</p>
+            <p><span className="font-semibold text-primary">Low:</span> No past due, no late payments</p>
+            <p><span className="font-semibold text-amber-600">Medium:</span> 1-2 late payments OR compliance 50-80%</p>
+            <p><span className="font-semibold text-orange-600">High:</span> 3+ late payments OR compliance &lt;50%</p>
             <p><span className="font-semibold text-destructive">Critical:</span> Any past due payments or past due amount &gt; 0</p>
           </div>
         </div>
 
         <p className="text-xs text-foreground pt-2 border-t border-primary/10">
-          ⚠️ Review borrower's total debt burden and payment history before approving new loans.
+          ⚠️ Review borrower&apos;s total debt burden and payment history before approving new loans.
         </p>
       </CardContent>
     </Card>

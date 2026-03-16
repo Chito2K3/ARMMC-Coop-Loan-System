@@ -8,6 +8,9 @@ import {
 } from "firebase/firestore";
 
 export async function getNextLoanNumber(firestore: Firestore): Promise<number> {
+    if (!firestore) {
+        throw new Error("Firestore instance is required");
+    }
     try {
         const loansRef = collection(firestore, "loans");
         // Query the loans collection for the highest loanNumber
@@ -16,7 +19,11 @@ export async function getNextLoanNumber(firestore: Firestore): Promise<number> {
 
         if (!querySnapshot.empty) {
             const lastLoan = querySnapshot.docs[0].data();
-            return (lastLoan.loanNumber || 0) + 1;
+            const loanNumber = lastLoan.loanNumber;
+            if (typeof loanNumber !== 'number' || loanNumber < 0) {
+                throw new Error("Invalid loan number in database");
+            }
+            return loanNumber + 1;
         }
 
         return 1;

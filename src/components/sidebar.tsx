@@ -10,18 +10,15 @@ import { useFirestore } from '@/firebase/provider';
 import { useCollection, useMemoFirebase } from '@/firebase';
 import { useApprovalPanel } from './approval-context';
 import Link from 'next/link';
-import { differenceInDays } from 'date-fns';
-import { getPenaltySettings } from '@/firebase/penalty-service';
 import type { Loan } from '@/lib/types';
 
 export function Sidebar() {
   const { user } = useUser();
   const auth = useAuth();
   const firestore = useFirestore();
-  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowReleasePanel, setShowPenaltyPanel } = useApprovalPanel();
+  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowReleasePanel } = useApprovalPanel();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
-  const [penaltyCount, setPenaltyCount] = useState(0);
 
   useEffect(() => {
     if (user && firestore) {
@@ -64,66 +61,6 @@ export function Sidebar() {
     return allLoans.filter(loan => loan.status === 'approved').length;
   }, [allLoans]);
 
-
-
-  // ...
-
-  useEffect(() => {
-    const fetchPenalties = async () => {
-      if (!allLoans || !firestore) {
-        setPenaltyCount(0);
-        return;
-      }
-
-      let gracePeriod = 3;
-      try {
-        const settings = await getPenaltySettings(firestore);
-        gracePeriod = settings.gracePeriodDays;
-      } catch (e) {
-        console.error('Failed to load penalty settings:', e);
-      }
-
-      let count = 0;
-      for (const loan of allLoans) {
-        if (loan.status === 'released') {
-          try {
-            const paymentsRef = collection(firestore, 'loans', loan.id, 'payments');
-            const snapshot = await getDocs(paymentsRef);
-
-            snapshot.docs.forEach((doc) => {
-              const payment = doc.data();
-              // Logic check
-              const dueDate = payment.dueDate?.toDate?.() || new Date(payment.dueDate);
-
-              if (!isNaN(dueDate.getTime())) {
-                const today = new Date();
-                let isOverdue = false;
-
-                if (payment.status === 'paid' && payment.paymentDate) {
-                  const paymentDate = payment.paymentDate?.toDate?.() || new Date(payment.paymentDate);
-                  isOverdue = differenceInDays(paymentDate, dueDate) > gracePeriod;
-                } else if (payment.status === 'pending') {
-                  isOverdue = differenceInDays(today, dueDate) > gracePeriod;
-                }
-
-                const penalty = isOverdue && !payment.penaltyWaived && !payment.penaltyDenied ? 500 : 0;
-
-                if (penalty > 0) {
-                  count++;
-                }
-              }
-            });
-          } catch (err) {
-            console.error(`Error fetching payments for loan ${loan.id}:`, err);
-          }
-        }
-      }
-
-      setPenaltyCount(count);
-    };
-
-    fetchPenalties();
-  }, [allLoans, firestore]);
 
   const handleLogout = async () => {
     try {
@@ -186,11 +123,7 @@ export function Sidebar() {
             For Releasing {releaseCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{releaseCount}</span>}
           </Button>
         )}
-        {(userRole === 'approver' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => setShowPenaltyPanel(true)}>
-            Waive Penalty {penaltyCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{penaltyCount}</span>}
-          </Button>
-        )}
+
       </div>
 
       <div className="p-6 border-t border-border">

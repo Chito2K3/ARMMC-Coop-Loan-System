@@ -28,6 +28,10 @@ export interface Loan {
   createdAt: Timestamp | Date;
   updatedAt: Timestamp | Date;
   releasedAt?: Timestamp | Date;
+  historical_shortfall_bucket?: number;
+  final_surcharge_total?: number;
+  final_surcharge_paid?: number;
+  final_surcharge_date?: Timestamp | Date;
 }
 
 export type PaymentStatus = 'pending' | 'paid';
@@ -42,8 +46,8 @@ export interface Payment {
   actualAmountPaid?: number;
   status: PaymentStatus;
   penalty: number;
-  penaltyWaived: boolean;
-  penaltyDenied?: boolean;
+  shortfall_recorded?: number;
+  monthly_penalty?: number;
 }
 
 export interface PenaltySettings {
@@ -59,6 +63,7 @@ export type LoanSerializable = Omit<Loan, 'createdAt' | 'updatedAt' | 'releasedA
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   releasedAt?: string; // ISO string
+  final_surcharge_date?: string; // ISO string
 };
 
 export type PaymentSerializable = Omit<Payment, 'dueDate' | 'paymentDate'> & {

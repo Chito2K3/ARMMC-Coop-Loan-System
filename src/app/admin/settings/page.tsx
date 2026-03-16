@@ -57,12 +57,33 @@ export default function AdminSettingsPage() {
   const handleSave = async () => {
     if (!firestore || !user) return;
 
+    const penaltyValue = Number(penaltyAmount);
+    const gracePeriodValue = Number(gracePeriodDays);
+
+    if (isNaN(penaltyValue) || penaltyValue <= 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Input',
+        description: 'Penalty amount must be a positive number.',
+      });
+      return;
+    }
+
+    if (isNaN(gracePeriodValue) || gracePeriodValue < 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Input',
+        description: 'Grace period must be a non-negative number.',
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       await updatePenaltySettings(
         firestore,
-        Number(penaltyAmount),
-        Number(gracePeriodDays),
+        penaltyValue,
+        gracePeriodValue,
         user.uid
       );
       toast({
@@ -156,7 +177,16 @@ export default function AdminSettingsPage() {
               {settings && (
                 <div className="pt-4 border-t space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Last updated: {settings.updatedAt instanceof Date ? settings.updatedAt.toLocaleString() : (settings.updatedAt as any).toDate?.().toLocaleString() || new Date(settings.updatedAt as any).toLocaleString()}
+                    Last updated: {(() => {
+                      try {
+                        return settings.updatedAt instanceof Date 
+                          ? settings.updatedAt.toLocaleString() 
+                          : (settings.updatedAt as any).toDate?.().toLocaleString() || new Date(settings.updatedAt as any).toLocaleString();
+                      } catch (error) {
+                        console.error('Error formatting date:', error);
+                        return 'Unknown';
+                      }
+                    })()}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Updated by: {settings.updatedBy}

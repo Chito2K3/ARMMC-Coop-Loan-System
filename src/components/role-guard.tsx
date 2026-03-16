@@ -17,7 +17,12 @@ export function RoleGuard({ children, requiredRole }: RoleGuardProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || isUserLoading) return;
+    if (isUserLoading) return;
+    
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
 
     const fetchUserRole = async () => {
       try {
@@ -48,12 +53,23 @@ export function RoleGuard({ children, requiredRole }: RoleGuardProps) {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Authentication Required</h1>
+          <p className="text-muted-foreground">Please log in to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (requiredRole === 'admin' && userRole !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
-          <p className="text-muted-foreground">You don't have permission to access this page.</p>
+          <p className="text-muted-foreground">You don&apos;t have permission to access this page.</p>
         </div>
       </div>
     );

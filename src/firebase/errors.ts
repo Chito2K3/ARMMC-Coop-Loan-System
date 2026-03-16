@@ -83,9 +83,10 @@ function buildRequestObject(context: SecurityRuleContext): SecurityRuleRequest {
     if (currentUser) {
       authObject = buildAuthObject(currentUser);
     }
-  } catch {
+  } catch (error) {
     // This will catch errors if the Firebase app is not yet initialized.
     // In this case, we'll proceed without auth information.
+    console.warn('Failed to retrieve Firebase auth information:', error);
   }
 
   return {
@@ -117,7 +118,14 @@ export class FirestorePermissionError extends Error {
   constructor(context: SecurityRuleContext) {
     const requestObject = buildRequestObject(context);
     super(buildErrorMessage(requestObject));
-    this.name = 'FirebaseError';
+    this.name = 'FirestorePermissionError';
     this.request = requestObject;
+    
+    // Log the permission error for debugging
+    console.error('Firestore Permission Error:', {
+      operation: context.operation,
+      path: context.path,
+      auth: requestObject.auth ? 'authenticated' : 'unauthenticated'
+    });
   }
 }

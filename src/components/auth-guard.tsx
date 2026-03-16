@@ -19,9 +19,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const firestore = useFirestore();
     const router = useRouter();
     const pathname = usePathname();
-    const [isRoleChecked, setIsRoleChecked] = useState(false);
-    const [isAuthorized, setIsAuthorized] = useState(false);
-    const [shouldShowContent, setShouldShowContent] = useState(false);
+    const [authState, setAuthState] = useState({ isRoleChecked: false, isAuthorized: false, shouldShowContent: false });
     const previousUserRef = useRef<string | null>(null);
 
     useEffect(() => {
@@ -32,9 +30,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
         if (!user || !firestore) {
             // No user logged in or firestore not available
-            setIsRoleChecked(true);
-            setIsAuthorized(false);
-            setShouldShowContent(false);
+            setAuthState({ isRoleChecked: true, isAuthorized: false, shouldShowContent: false });
             return;
         }
 
@@ -55,41 +51,38 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
                     // Check if user is accessing admin path without admin role
                     if (isAdminPath && !isAdmin) {
-                        setShouldShowContent(false);
-                        setIsAuthorized(false);
+                        setAuthState({ isRoleChecked: true, isAuthorized: false, shouldShowContent: false });
                         router.push('/');
                     } else {
                         // User has valid access to current path
-                        setShouldShowContent(true);
-                        setIsAuthorized(true);
+                        setAuthState({ isRoleChecked: true, isAuthorized: true, shouldShowContent: true });
                     }
                 } else {
-                    // User document doesn't exist - create one with default role
-                    const userId = user.email?.replace(/[^a-zA-Z0-9]/g, '_') || user.uid;
-                    const now = new Date();
+                        // User document doesn't exist - create one keyed by UID so
+                        // security rules that lookup `users/{request.auth.uid}` succeed.
+                        const userId = user.uid;
+                        const now = new Date();
 
-                    await setDoc(doc(firestore, 'users', userId), {
-                        email: user.email,
-                        name: user.displayName || user.email?.split('@')[0] || 'User',
-                        role: 'bookkeeper', // Default role for new users
-                        createdAt: now,
-                        updatedAt: now,
-                    });
+                        await setDoc(doc(firestore, 'users', userId), {
+                            email: user.email,
+                            name: user.displayName || user.email?.split('@')[0] || 'User',
+                            role: 'bookkeeper', // Default role for new users
+                            createdAt: now,
+                            updatedAt: now,
+                        });
 
                     // After creating the user, allow them to access the app
-                    setShouldShowContent(true);
-                    setIsAuthorized(true);
+                    setAuthState({ isRoleChecked: true, isAuthorized: true, shouldShowContent: true });
                 }
                 previousUserRef.current = user.uid;
             } catch (err) {
                 console.error('Failed to check role:', err);
                 if (isMounted) {
-                    setShouldShowContent(false);
-                    setIsAuthorized(false);
+                    setAuthState({ isRoleChecked: false, isAuthorized: false, shouldShowContent: false });
                 }
             } finally {
                 if (isMounted) {
-                    setIsRoleChecked(true);
+                    setAuthState(prev => ({ ...prev, isRoleChecked: true }));
                 }
             }
         };
@@ -109,7 +102,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         return <LoginPage />;
     }
 
-    if (!isRoleChecked || !shouldShowContent) {
+    if (!authState.isRoleChecked || !authState.shouldShowContent) {
         return <LoadingSpinner />;
     }
 

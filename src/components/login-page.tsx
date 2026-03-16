@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth, useFirestore } from "@/firebase/provider";
 import { initiateEmailSignIn, initiateEmailSignUp } from "@/firebase/non-blocking-login";
-import { getOrCreateUser } from "@/firebase/user-service";
+import { getUser } from "@/firebase/user-service";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { signOut } from "firebase/auth";
@@ -35,12 +35,20 @@ export function LoginPage() {
             }
             const user = auth.currentUser;
             if (user) {
-                const userProfile = await getOrCreateUser(firestore, user.uid, user.email || "", user.displayName || email);
-                
-                // If user not found in Firestore, sign them out
-                if (!userProfile) {
+                try {
+                    const userProfile = await getUser(firestore, user.uid, user.email || "", user.displayName || email);
+                    
+                    // If user not found in Firestore, sign them out
+                    if (!userProfile) {
+                        await signOut(auth);
+                        setError("User account not found. Please contact your administrator.");
+                        setIsLoading(false);
+                        return;
+                    }
+                } catch (userError) {
+                    console.error("Error fetching user profile:", userError);
                     await signOut(auth);
-                    setError("User account not found. Please contact your administrator.");
+                    setError("Failed to load user profile. Please try again.");
                     setIsLoading(false);
                     return;
                 }
@@ -48,22 +56,16 @@ export function LoginPage() {
         } catch (error: any) {
             console.error("Authentication failed:", error);
 
-            let errorMessage = "Authentication failed. Please try again.";
+            const errorMessages: Record<string, string> = {
+                'auth/email-already-in-use': "This email is already registered. Please sign in instead.",
+                'auth/invalid-email': "Invalid email address.",
+                'auth/weak-password': "Password should be at least 6 characters.",
+                'auth/user-not-found': "No account found with this email.",
+                'auth/wrong-password': "Incorrect password.",
+                'auth/invalid-credential': "Invalid email or password.",
+            };
 
-            if (error.code === 'auth/email-already-in-use') {
-                errorMessage = "This email is already registered. Please sign in instead.";
-            } else if (error.code === 'auth/invalid-email') {
-                errorMessage = "Invalid email address.";
-            } else if (error.code === 'auth/weak-password') {
-                errorMessage = "Password should be at least 6 characters.";
-            } else if (error.code === 'auth/user-not-found') {
-                errorMessage = "No account found with this email.";
-            } else if (error.code === 'auth/wrong-password') {
-                errorMessage = "Incorrect password.";
-            } else if (error.code === 'auth/invalid-credential') {
-                errorMessage = "Invalid email or password.";
-            }
-
+            const errorMessage = errorMessages[error.code] || "Authentication failed. Please try again.";
             setError(errorMessage);
             setIsLoading(false);
         }

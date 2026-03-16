@@ -43,7 +43,13 @@ function createEventEmitter<T extends Record<string, any>>() {
       if (!events[eventName]) {
         return;
       }
-      events[eventName] = events[eventName]?.filter(cb => cb !== callback);
+      const callbacks = events[eventName];
+      if (callbacks) {
+        const index = callbacks.indexOf(callback);
+        if (index > -1) {
+          callbacks.splice(index, 1);
+        }
+      }
     },
 
     /**

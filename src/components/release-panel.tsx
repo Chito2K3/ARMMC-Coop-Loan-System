@@ -17,28 +17,29 @@ export function ReleasePanel({ onSelectLoan, selectedLoanId }: ReleasePanelProps
 
   const loansQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'loans'), orderBy('createdAt', 'desc'));
+    return query(
+      collection(firestore, 'loans'),
+      where('status', '==', 'approved'),
+      orderBy('createdAt', 'desc')
+    );
   }, [firestore]);
 
-  const { data: allLoans } = useCollection<Loan>(loansQuery);
+  const { data: loansForRelease } = useCollection<Loan>(loansQuery);
 
-  const loansForRelease = useMemo(() => {
-    if (!allLoans) return [];
-    return allLoans.filter(loan => loan.status === 'approved');
-  }, [allLoans]);
+  const safeLoansForRelease = loansForRelease ?? [];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>For Releasing</CardTitle>
-        <CardDescription>{loansForRelease.length} approved loans</CardDescription>
+        <CardDescription>{safeLoansForRelease.length} approved loans</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {loansForRelease.length === 0 ? (
+          {safeLoansForRelease.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">No loans ready for release</p>
           ) : (
-            loansForRelease.map(loan => (
+            safeLoansForRelease.map(loan => (
               <button
                 key={loan.id}
                 onClick={() => onSelectLoan(loan.id)}

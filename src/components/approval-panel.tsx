@@ -36,7 +36,10 @@ export function ApprovalPanel({ onSelectLoan, selectedLoanId }: ApprovalPanelPro
       <CardContent>
         <div className="space-y-2">
           {loansError && (
-            <p className="text-center text-destructive py-8">Failed to load loans</p>
+            <>
+              {console.error('Error loading loans:', loansError)}
+              <p className="text-center text-destructive py-8">Failed to load loans</p>
+            </>
           )}
           {pendingLoans.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">No loans pending approval</p>

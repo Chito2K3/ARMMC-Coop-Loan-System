@@ -25,6 +25,8 @@ import {
   writeBatch,
   Firestore,
   getDocs,
+  getDoc,
+  setDoc,
   query,
   orderBy,
 } from 'firebase/firestore';
@@ -57,10 +59,10 @@ import {
   updateDocumentNonBlocking,
   deleteDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
-import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { getUser } from '@/firebase/user-service';
 import { toast } from '@/hooks/use-toast';
-import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
+import type { Loan, LoanWrite, LoanSerializable, PaymentWrite, Payment } from '@/lib/types';
 import { StatusBadge } from './status-badge';
 import { LoanFormSheet } from './loan-form-sheet';
 import { ExistingLoansCheck } from './existing-loans-check';
@@ -71,24 +73,50 @@ import { useApprovalPanel } from './approval-context';
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
 
-  const monthlyPrincipal = loan.amount / loan.paymentTerm;
+  const principal = loan.amount;
+  const term = loan.paymentTerm;
+  const interestRate = 0.015; // 1.5% diminishing
 
-  const paymentSchedule: PaymentWrite[] = Array.from(
-    { length: loan.paymentTerm },
-    (_, i) => {
-      const dueDate = addMonths(releasedAt, i + 1);
+  const approximateMonthlyPrincipalPayment = principal / term;
+  let beginningBalance = principal;
+  let totalPrincipalPaid = 0;
 
-      return {
-        loanId: loan.id,
-        paymentNumber: i + 1,
-        dueDate: Timestamp.fromDate(dueDate),
-        amount: monthlyPrincipal,
-        status: 'pending',
-        penalty: 0,
-        penaltyWaived: false,
-      };
+  const paymentSchedule: PaymentWrite[] = [];
+
+  for (let i = 0; i < term; i++) {
+    const month = i + 1;
+    const interest = beginningBalance * interestRate;
+
+    let principalPayment = 0;
+    let totalMonthlyPayment = 0;
+
+    if (month === term) {
+      // Last month: The principal payment is exactly whatever balance is remaining. 
+      principalPayment = principal - totalPrincipalPaid;
+      totalMonthlyPayment = principalPayment + interest;
+    } else {
+      // Normal month: Total Payment must be a clean, whole Peso.
+      const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
+      totalMonthlyPayment = Math.round(exactTotalPayment);
+      
+      // Principal is whatever is left over after satisfying the exact interest portion
+      principalPayment = totalMonthlyPayment - interest;
     }
-  );
+
+    const dueDate = addMonths(releasedAt, month);
+
+    paymentSchedule.push({
+      loanId: loan.id,
+      paymentNumber: month,
+      dueDate: Timestamp.fromDate(dueDate),
+      amount: totalMonthlyPayment,
+      status: 'pending',
+      penalty: 0,
+    });
+
+    beginningBalance -= principalPayment;
+    totalPrincipalPaid += principalPayment;
+  }
 
   return paymentSchedule;
 };
@@ -102,7 +130,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUser();
-  const { showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showPenaltyPanel, showReleasePanel } = useApprovalPanel();
+  const { showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel } = useApprovalPanel();
   const [userRole, setUserRole] = React.useState<string | null>(null);
   const [requirementDialogOpen, setRequirementDialogOpen] = React.useState(false);
   const [requirementMessage, setRequirementMessage] = React.useState('');
@@ -134,9 +162,34 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       createdAt: toDate(rawLoan.createdAt) || new Date(),
       updatedAt: toDate(rawLoan.updatedAt) || new Date(),
       releasedAt: toDate(rawLoan.releasedAt) || undefined,
+      final_surcharge_date: toDate(rawLoan.final_surcharge_date) || undefined,
       loanNumber: rawLoan.loanNumber || 0,
     };
   }, [rawLoan]);
+
+  const paymentsQuery = useMemoFirebase(() => {
+    if (!firestore || !loanId) return null;
+    return query(
+      collection(firestore, 'loans', loanId, 'payments'),
+      orderBy('paymentNumber', 'asc')
+    );
+  }, [firestore, loanId]);
+
+  const { data: paymentsData } = useCollection<Payment>(paymentsQuery);
+
+  const localShortfall = React.useMemo(() => {
+    if (!paymentsData) return 0;
+    return paymentsData.reduce((acc: number, p: Payment) => {
+      if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
+        return acc + Math.max(0, p.amount - (Number(p.actualAmountPaid) || 0));
+      }
+      return acc;
+    }, 0);
+  }, [paymentsData]);
+
+  const effectiveShortfallBucket = Math.max(loan?.historical_shortfall_bucket || 0, localShortfall);
+  // Full Settlement: Principal Shortfalls + 2% Monthly Penalty + 2% Maturity Surcharge (Total 104%)
+  const isSurchargePending = effectiveShortfallBucket > 0.01 && (loan?.final_surcharge_paid || 0) < (effectiveShortfallBucket * 1.04) - 0.01;
 
   React.useEffect(() => {
     if (showReleasePanel && loan?.status === 'approved') {
@@ -238,6 +291,25 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     if (!firestore || !loan || !loanRef) return;
     setIsSubmitting(true);
     try {
+      // Ensure a users/{uid} doc exists so security rules that look up by UID succeed.
+      try {
+        if (user) {
+          const userRef = doc(firestore, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              email: user.email || '',
+              name: user.displayName || '',
+              role: 'user',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error ensuring users/{uid} doc before release:', err);
+      }
+
       const releasedAtDate = new Date();
       const batch = writeBatch(firestore);
 
@@ -319,6 +391,14 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       return;
     }
     handleUpdate({ status: 'approved' });
+  };
+
+  const handleBackClick = () => {
+    if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel) && onBack) {
+      onBack();
+    } else {
+      router.back();
+    }
   };
 
   const handleDenyClick = () => {
@@ -415,6 +495,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     createdAt: loan.createdAt.toISOString(),
     updatedAt: loan.updatedAt.toISOString(),
     releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
+    final_surcharge_date: loan.final_surcharge_date ? (loan.final_surcharge_date instanceof Date ? loan.final_surcharge_date.toISOString() : (loan.final_surcharge_date as any).toDate().toISOString()) : undefined,
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
@@ -422,11 +503,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const isPayrollCheckerRole = userRole === 'payrollChecker' || isAdmin;
   const isBookkeeperRole = userRole === 'bookkeeper' || isAdmin;
   const isApproverRole = userRole === 'approver' || isAdmin;
-
-  const handleBackClick = () => {
-    if (onBack) onBack();
-    else router.push('/');
-  };
 
   return (
     <div className="space-y-6">
@@ -627,14 +703,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               {loan.status === 'pending' && loan.payrollChecked && (
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Approval Required</p>
-                  <Button
-                    variant="outline"
-                    className="w-full mb-2"
-                    onClick={() => setComputationDialogOpen(true)}
-                  >
-                    <Calculator className="mr-2 h-4 w-4" />
-                    View Computation Details
-                  </Button>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
@@ -654,6 +722,15 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                       <ThumbsDown className="mr-2 h-4 w-4" /> Deny
                     </Button>
                   </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setComputationDialogOpen(true)}
+                  >
+                    <Calculator className="mr-2 h-4 w-4" />
+                    View Computation
+                  </Button>
                   {!isApproverRole && (
                     <p className="text-xs text-muted-foreground">Only approver can approve/deny loans</p>
                   )}
@@ -682,22 +759,36 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               {['released', 'fully-paid'].includes(loan.status) && (
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Collection Phase</p>
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => setComputationDialogOpen(true)}
-                  >
-                    <Calculator className="mr-2 h-4 w-4" />
-                    View Computation
-                  </Button>
+                  {isSurchargePending ? (
+                    <div className="p-3 bg-amber-950/20 border border-amber-500/50 rounded-lg space-y-2">
+                       <div className="flex items-center gap-2 text-amber-500 font-bold">
+                          <Calculator className="h-4 w-4" />
+                          Final Settlement Audit
+                       </div>
+                       <p className="text-xs text-amber-200/80 leading-relaxed">
+                          Shortfalls of ₱{effectiveShortfallBucket.toLocaleString()} detected. 
+                          A total settlement of **₱{(effectiveShortfallBucket * 1.04).toLocaleString()}** (Principal + 4% Surcharge) is required to close this loan.
+                       </p>
+                    </div>
+                  ) : loan.status === 'released' && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => setComputationDialogOpen(true)}
+                    >
+                      <Calculator className="mr-2 h-4 w-4" />
+                      View Computation
+                    </Button>
+                  )}
                 </div>
               )}
 
               {/* Completed/Denied */}
-              {loan.status === 'fully-paid' && (
-                <div className="text-center py-4">
+              {loan.status === 'fully-paid' && !isSurchargePending && (
+                <div className="text-center py-4 bg-green-50 rounded-lg border border-green-100">
                   <Check className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-700">Loan Fully Paid</p>
+                  <p className="text-sm font-bold text-green-700 uppercase tracking-wider">Loan Fully Processed</p>
+                  <p className="text-xs text-green-600">All payments and audits cleared.</p>
                 </div>
               )}
 

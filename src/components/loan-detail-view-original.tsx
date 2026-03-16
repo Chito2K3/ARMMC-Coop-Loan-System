@@ -23,6 +23,9 @@ import {
   getDocs,
   query,
   orderBy,
+  getDoc,
+  setDoc,
+  where,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -54,7 +57,7 @@ import {
   deleteDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { getOrCreateUser } from '@/firebase/user-service';
+import { getUser, type UserProfile } from '@/firebase/user-service';
 import { toast } from '@/hooks/use-toast';
 import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
 import { StatusBadge } from './status-badge';
@@ -105,8 +108,8 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
 
   React.useEffect(() => {
     if (user && firestore) {
-      getOrCreateUser(firestore, user.uid, user.email || '', user.displayName || '')
-        .then(profile => setUserRole(profile?.role || null))
+      getUser(firestore, user.uid, user.email || '', user.displayName || '')
+        .then((profile: UserProfile | null) => setUserRole(profile?.role || null))
         .catch(() => setUserRole(null));
     }
   }, [user, firestore]);
@@ -138,7 +141,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
     if (showReleasePanel && loan?.status === 'approved') {
       setComputationDialogOpen(true);
     }
-  }, [showReleasePanel, loan?.status]);
+  }, [showReleasePanel, loan]);
 
   React.useEffect(() => {
     if (!loan || !loanRef || loan.status !== 'pending') return;
@@ -192,7 +195,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
     };
 
     regeneratePaymentSchedule();
-  }, [loan?.releasedAt, firestore, loanId, loan?.status]);
+  }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
@@ -233,6 +236,49 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
     if (!firestore || !loan || !loanRef) return;
     setIsSubmitting(true);
     try {
+      // Ensure a users/{uid} doc exists so security rules that look up by UID succeed.
+      try {
+        if (user) {
+          const userRef = doc(firestore, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            if (user.email) {
+              const usersRef = collection(firestore, 'users');
+              const emailQ = query(usersRef, where('email', '==', user.email));
+              const emailSnap = await getDocs(emailQ);
+              if (!emailSnap.empty) {
+                const data = emailSnap.docs[0].data();
+                await setDoc(userRef, {
+                  email: data.email || user.email,
+                  name: data.name || user.displayName || '',
+                  role: data.role || 'user',
+                  createdAt: data.createdAt || serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                });
+              } else {
+                await setDoc(userRef, {
+                  email: user.email || '',
+                  name: user.displayName || '',
+                  role: 'user',
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                });
+              }
+            } else {
+              await setDoc(userRef, {
+                email: '',
+                name: user.displayName || '',
+                role: 'user',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error ensuring users/{uid} doc before release:', err);
+      }
+
       const releasedAtDate = new Date();
       const batch = writeBatch(firestore);
 
@@ -256,12 +302,19 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
       });
 
       setComputationDialogOpen(false);
-    } catch (error) {
-      console.error("Error releasing loan: ", error);
+    } catch (error: any) {
+      const serialize = (err: any) => {
+        try {
+          return JSON.stringify(err, Object.getOwnPropertyNames(err), 2);
+        } catch (_) {
+          return String(err);
+        }
+      };
+      console.error('Error releasing loan:', error, serialize(error));
       toast({
         variant: 'destructive',
         title: 'Release Failed',
-        description: (error as Error).message || "An unknown error occurred.",
+        description: error?.code || error?.message || String(error) || 'An unknown error occurred.',
       });
     } finally {
       setIsSubmitting(false);
@@ -286,18 +339,20 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
     if (!loanRef) return;
     setIsSubmitting(true);
     try {
-      deleteDocumentNonBlocking(loanRef);
+      await deleteDocumentNonBlocking(loanRef);
       toast({
         title: 'Loan Deleted',
         description: 'The loan application has been successfully deleted.',
       });
       router.push('/');
     } catch (error) {
+      console.error('Error deleting loan:', error);
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
-        description: (error as Error).message,
+        description: error instanceof Error ? error.message : 'Failed to delete loan',
       });
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -550,7 +605,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
           <Card>
             <CardHeader>
               <CardTitle>Approval Workflow</CardTitle>
-              <CardDescription>Manage the loan's journey.</CardDescription>
+              <CardDescription>Manage the loan&apos;s journey.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <ExistingLoansCheck

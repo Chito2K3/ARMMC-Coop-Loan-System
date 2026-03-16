@@ -20,19 +20,26 @@ export function RoleRedirect() {
       return;
     }
 
+    if (!firestore) {
+      console.error('Firestore not initialized');
+      setIsChecking(false);
+      return;
+    }
+
     const checkRoleAndRedirect = async () => {
       try {
         const userRef = doc(firestore, 'users', user.uid);
         const userSnap = await getDoc(userRef);
         
         if (userSnap.exists()) {
-          const role = userSnap.data().role;
+          const role = userSnap.data()?.role;
           if (role === 'admin') {
             router.push('/admin');
           } else {
             router.push('/');
           }
         } else {
+          console.warn('User document not found');
           router.push('/');
         }
       } catch (err) {

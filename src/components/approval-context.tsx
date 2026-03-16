@@ -9,8 +9,6 @@ interface ApprovalContextType {
   setShowSalaryInputPanel: (show: boolean) => void;
   showPastDuePanel: boolean;
   setShowPastDuePanel: (show: boolean) => void;
-  showPenaltyPanel: boolean;
-  setShowPenaltyPanel: (show: boolean) => void;
   showReleasePanel: boolean;
   setShowReleasePanel: (show: boolean) => void;
 }
@@ -21,11 +19,24 @@ export function ApprovalProvider({ children }: { children: React.ReactNode }) {
   const [showApprovalPanel, setShowApprovalPanel] = useState(false);
   const [showSalaryInputPanel, setShowSalaryInputPanel] = useState(false);
   const [showPastDuePanel, setShowPastDuePanel] = useState(false);
-  const [showPenaltyPanel, setShowPenaltyPanel] = useState(false);
   const [showReleasePanel, setShowReleasePanel] = useState(false);
 
+  const value = React.useMemo(
+    () => ({
+      showApprovalPanel,
+      setShowApprovalPanel,
+      showSalaryInputPanel,
+      setShowSalaryInputPanel,
+      showPastDuePanel,
+      setShowPastDuePanel,
+      showReleasePanel,
+      setShowReleasePanel,
+    }),
+    [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel]
+  );
+
   return (
-    <ApprovalContext.Provider value={{ showApprovalPanel, setShowApprovalPanel, showSalaryInputPanel, setShowSalaryInputPanel, showPastDuePanel, setShowPastDuePanel, showPenaltyPanel, setShowPenaltyPanel, showReleasePanel, setShowReleasePanel }}>
+    <ApprovalContext.Provider value={value}>
       {children}
     </ApprovalContext.Provider>
   );

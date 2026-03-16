@@ -63,6 +63,12 @@ export function AnalyticsDashboard() {
       const date = loan.createdAt && (loan.createdAt as any).toDate
         ? (loan.createdAt as any).toDate()
         : new Date();
+      
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        console.warn('Invalid date for loan:', loan.id);
+        return acc;
+      }
+      
       const month = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
       
       const existing = acc.find(item => item.month === month);
@@ -102,19 +108,21 @@ export function AnalyticsDashboard() {
     );
   }
 
+  const skeletonCards = Array.from({ length: 4 }, (_, i) => (
+    <Card key={i}>
+      <CardHeader>
+        <Skeleton className="h-4 w-24" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-8 w-16" />
+      </CardContent>
+    </Card>
+  ));
+
   if (loansLoading || !metrics) {
     return (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16" />
-            </CardContent>
-          </Card>
-        ))}
+        {skeletonCards}
       </div>
     );
   }
