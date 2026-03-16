@@ -124,11 +124,13 @@ export function LoanComputationDialog({
     const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
     
     // Total deductions
+    const outstandingBalance = loan.outstandingBalanceAtRenewal || 0;
     const totalDeductions =
       serviceCharge +
       shareCapital +
       firstMonthAmortizationDeduction +
-      firstMonthInterest;
+      firstMonthInterest +
+      outstandingBalance;
 
     const netProceeds = principal - totalDeductions;
     
@@ -150,6 +152,7 @@ export function LoanComputationDialog({
       totalDeductions,
       netProceeds,
       loanTermInYears,
+      outstandingBalance,
     };
   }, [loan]);
 
@@ -261,6 +264,17 @@ export function LoanComputationDialog({
                   {formatCurrency(computation.firstMonthInterest)}
                 </span>
               </div>
+
+              {computation.outstandingBalance > 0 && (
+                <div className="flex justify-between text-base pt-2 border-t border-dashed border-red-500/20">
+                  <span className="text-red-500 font-medium">
+                    Outstanding Balance (Deducted)
+                  </span>
+                  <span className="font-bold text-red-600">
+                    - {formatCurrency(computation.outstandingBalance)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

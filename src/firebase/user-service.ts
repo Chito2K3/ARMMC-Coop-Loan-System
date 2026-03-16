@@ -1,6 +1,6 @@
 import { Firestore, collection, doc, getDoc, setDoc, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 
-export type UserRole = 'admin' | 'bookkeeper' | 'payrollChecker' | 'approver' | 'user';
+export type UserRole = 'admin' | 'bookkeeper' | 'payrollChecker' | 'creditCommitteeMember' | 'creditCommitteeOfficer' | 'user';
 
 export interface UserProfile {
   id: string;

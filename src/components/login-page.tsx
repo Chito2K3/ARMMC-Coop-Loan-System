@@ -29,6 +29,17 @@ export function LoginPage() {
 
         try {
             if (isSignUp) {
+                // PRE-REGISTRATION CHECK: Only allow sign up if email exists in Firestore 'users'
+                const usersRef = collection(firestore, 'users');
+                const q = query(usersRef, where('email', '==', email));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    setError("Access Denied: This email has not been pre-authorized by an Administrator.");
+                    setIsLoading(false);
+                    return;
+                }
+                
                 await initiateEmailSignUp(auth, email, password);
             } else {
                 await initiateEmailSignIn(auth, email, password);
@@ -62,7 +73,7 @@ export function LoginPage() {
                 'auth/weak-password': "Password should be at least 6 characters.",
                 'auth/user-not-found': "No account found with this email.",
                 'auth/wrong-password': "Incorrect password.",
-                'auth/invalid-credential': "Invalid email or password.",
+                'auth/invalid-credential': "Invalid email or password. If you haven't set a password yet, please click 'Sign Up' below.",
             };
 
             const errorMessage = errorMessages[error.code] || "Authentication failed. Please try again.";

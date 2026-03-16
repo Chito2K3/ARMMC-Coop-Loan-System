@@ -2,14 +2,8 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type LoanStatus = 'pending' | 'approved' | 'denied' | 'released' | 'fully-paid';
 export type ApprovalStatus = 'pending' | 'approved' | 'denied';
-export type LoanType = 'Cash Advance' | 'Multi-Purpose' | 'Emergency';
-export type LoanPurpose =
-  | 'Business Capital'
-  | 'Bills Payment'
-  | 'Tuition Fee'
-  | 'House Renovation'
-  | 'Medical Expenses'
-  | 'Travel Expenses';
+export type LoanType = string;
+export type LoanPurpose = string;
 
 export interface Loan {
   id: string;
@@ -32,6 +26,10 @@ export interface Loan {
   final_surcharge_total?: number;
   final_surcharge_paid?: number;
   final_surcharge_date?: Timestamp | Date;
+  reviews?: Record<string, { role: string; status: 'approved' | 'denied'; name: string; timestamp: any }>;
+  renewalOf?: string;
+  netProceeds?: number;
+  outstandingBalanceAtRenewal?: number;
 }
 
 export type PaymentStatus = 'pending' | 'paid';
@@ -48,6 +46,7 @@ export interface Payment {
   penalty: number;
   shortfall_recorded?: number;
   monthly_penalty?: number;
+  remarks?: string;
 }
 
 export interface PenaltySettings {

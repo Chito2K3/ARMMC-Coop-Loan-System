@@ -5,7 +5,7 @@ import { useAuth } from '@/firebase/provider';
 import { Button } from '@/components/ui/button';
 import { LogOut, BarChart3, Home, Settings } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, doc, getDoc, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase/provider';
 import { useCollection, useMemoFirebase } from '@/firebase';
 import { useApprovalPanel } from './approval-context';
@@ -24,12 +24,23 @@ export function Sidebar() {
     if (user && firestore) {
       const fetchUserData = async () => {
         try {
-          const usersRef = collection(firestore, 'users');
-          const snapshot = await getDocs(usersRef);
-          const userData = snapshot.docs.find(doc => doc.data().email === user.email)?.data();
-          if (userData) {
+          const userDocRef = doc(firestore, 'users', user.uid);
+          const userSnap = await getDoc(userDocRef);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
             setUserName(userData.name);
             setUserRole(userData.role);
+          } else {
+            // Fallback to email search if UID doc doesn't exist
+            const usersRef = collection(firestore, 'users');
+            const q = query(usersRef, where('email', '==', user.email));
+            const snapshot = await getDocs(q);
+            const userData = snapshot.docs[0]?.data();
+            if (userData) {
+              setUserName(userData.name);
+              setUserRole(userData.role);
+            }
           }
         } catch (err) {
           console.error('Failed to fetch user data:', err);
@@ -100,7 +111,7 @@ export function Sidebar() {
             Reports
           </Button>
         </Link>
-        {userRole === 'admin' && (
+        {(userRole === 'admin' || userRole === 'bookkeeper') && (
           <Link href="/admin/settings" className="w-full block">
             <Button variant="ghost" className="w-full justify-start">
               <Settings className="h-4 w-4 mr-2" />
@@ -108,7 +119,7 @@ export function Sidebar() {
             </Button>
           </Link>
         )}
-        {(userRole === 'approver' || userRole === 'admin') && (
+        {(userRole === 'creditCommitteeMember' || userRole === 'creditCommitteeOfficer' || userRole === 'admin') && (
           <Button variant="outline" className="w-full justify-start" onClick={() => setShowApprovalPanel(true)}>
             For Approval {approvalCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
           </Button>

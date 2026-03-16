@@ -26,7 +26,8 @@ const ROLES: { value: UserRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
   { value: 'bookkeeper', label: 'Bookkeeper' },
   { value: 'payrollChecker', label: 'Payroll Checker' },
-  { value: 'approver', label: 'Approver' },
+  { value: 'creditCommitteeMember', label: 'Credit Committee Member' },
+  { value: 'creditCommitteeOfficer', label: 'Credit Committee Officer' },
 ];
 
 export function AdminDashboard() {
@@ -223,10 +224,14 @@ export function AdminDashboard() {
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add User
+                  Add User Profile
                 </>
               )}
             </Button>
+            <p className="text-xs text-muted-foreground mt-2">
+              <strong>Note:</strong> This only sets the user\'s role. The user must still go to the 
+              Login page and click <strong>"Sign Up"</strong> with this email to set their password.
+            </p>
           </form>
         </CardContent>
       </Card>

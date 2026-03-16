@@ -117,7 +117,7 @@ export function Header() {
             </Link>
           </>
         )}
-        {(userRole === 'approver' || userRole === 'admin') && (
+        {(userRole === 'creditCommitteeMember' || userRole === 'creditCommitteeOfficer' || userRole === 'admin') && (
           <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowApprovalPanel(true); }}>
             For Approval {approvalCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
           </Button>

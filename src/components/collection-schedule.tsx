@@ -336,6 +336,9 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   };
 
   const getPaymentStatus = (payment: (typeof payments)[0]) => {
+    if (payment.remarks === 'Deducted from proceeds') {
+      return <Badge className="bg-blue-600 hover:bg-blue-700">Deducted</Badge>;
+    }
     if (payment.paymentDate) {
       return <Badge className="bg-green-600 hover:bg-green-700">Paid</Badge>;
     }
@@ -367,7 +370,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       <CardContent>
         {currentMonth === loan.paymentTerm - 1 && isSurchargeRequired && (
           <div className="mb-4 p-4 bg-orange-50 border border-orange-200 text-orange-800 rounded-lg text-sm font-medium flex items-center gap-2">
-            ⚠️ System Audit: A "Double 2%" penalty (₱{formatCurrency(finalSurchargeTotal)}) will be added to your final settlement due to previous shortfalls.
+            ⚠️ System Audit: A "Double 2%" penalty (₱{formatCurrency(finalSurchargeTotal)}) will be added to your final settlement due to previous shortfalls (2% Monthly + 2% Maturity).
           </div>
         )}
         
@@ -424,34 +427,40 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                       {payment.dueDate ? format(payment.dueDate, 'MMM d, yyyy') : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={'outline'}
-                            className={cn(
-                              'w-[200px] justify-start text-left font-normal',
-                              !payment.paymentDate && 'text-muted-foreground',
-                              userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
-                            )}
-                            disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {payment.paymentDate ? (
-                              format(payment.paymentDate, 'MMM d, yyyy')
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={payment.paymentDate}
-                            onSelect={(date) => handleDateChange(payment.id, date)}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      {payment.remarks === 'Deducted from proceeds' ? (
+                        <div className="flex items-center gap-2 text-sm text-blue-400 font-medium italic px-2">
+                          <span>Deducted at Release</span>
+                        </div>
+                      ) : (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant={'outline'}
+                              className={cn(
+                                'w-[200px] justify-start text-left font-normal',
+                                !payment.paymentDate && 'text-muted-foreground',
+                                userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
+                              )}
+                              disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {payment.paymentDate ? (
+                                format(payment.paymentDate, 'MMM d, yyyy')
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={payment.paymentDate}
+                              onSelect={(date) => handleDateChange(payment.id, date)}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(payment.amount)}
@@ -461,7 +470,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                         <span className="font-medium">
                           {payment.actualAmountPaid ? formatCurrency(payment.actualAmountPaid) : '—'}
                         </span>
-                        {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && (
+                        {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && payment.remarks !== 'Deducted from proceeds' && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -535,9 +544,9 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                     </Popover>
                   </TableCell>
                   <TableCell colSpan={2} className="font-bold text-amber-500">
-                    Final Settlement Collection <br/>
+                    Final Settlement Audit (2% Monthly + 2% Maturity) <br/>
                     <span className="text-xs text-amber-200/70 font-normal">
-                      Full Principal Shortfalls + Accumulated 4% Surcharge <br/>
+                      Full Principal Shortfalls + Accumulated 4% Total Surcharge <br/>
                       Based on ₱{(effectiveShortfallBucket).toLocaleString()} total shortfall
                     </span>
                   </TableCell>
