@@ -25,8 +25,6 @@ import {
   writeBatch,
   Firestore,
   getDocs,
-  getDoc,
-  setDoc,
   query,
   orderBy,
 } from 'firebase/firestore';
@@ -54,16 +52,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 
 import {
   updateDocumentNonBlocking,
   deleteDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
-import { useCollection, useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { getUser } from '@/firebase/user-service';
 import { toast } from '@/hooks/use-toast';
-import type { Loan, LoanWrite, LoanSerializable, PaymentWrite, Payment } from '@/lib/types';
+import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
 import { StatusBadge } from './status-badge';
 import { LoanFormSheet } from './loan-form-sheet';
 import { ExistingLoansCheck } from './existing-loans-check';
@@ -74,50 +71,24 @@ import { useApprovalPanel } from './approval-context';
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
 
-  const principal = loan.amount;
-  const term = loan.paymentTerm;
-  const interestRate = 0.015; // 1.5% diminishing
+  const monthlyPrincipal = loan.amount / loan.paymentTerm;
 
-  const approximateMonthlyPrincipalPayment = principal / term;
-  let beginningBalance = principal;
-  let totalPrincipalPaid = 0;
+  const paymentSchedule: PaymentWrite[] = Array.from(
+    { length: loan.paymentTerm },
+    (_, i) => {
+      const dueDate = addMonths(releasedAt, i + 1);
 
-  const paymentSchedule: PaymentWrite[] = [];
-
-  for (let i = 0; i < term; i++) {
-    const month = i + 1;
-    const interest = beginningBalance * interestRate;
-
-    let principalPayment = 0;
-    let totalMonthlyPayment = 0;
-
-    if (month === term) {
-      // Last month: The principal payment is exactly whatever balance is remaining. 
-      principalPayment = principal - totalPrincipalPaid;
-      totalMonthlyPayment = principalPayment + interest;
-    } else {
-      // Normal month: Total Payment must be a clean, whole Peso.
-      const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
-      totalMonthlyPayment = Math.round(exactTotalPayment);
-      
-      // Principal is whatever is left over after satisfying the exact interest portion
-      principalPayment = totalMonthlyPayment - interest;
+      return {
+        loanId: loan.id,
+        paymentNumber: i + 1,
+        dueDate: Timestamp.fromDate(dueDate),
+        amount: monthlyPrincipal,
+        status: 'pending',
+        penalty: 0,
+        penaltyWaived: false,
+      };
     }
-
-    const dueDate = addMonths(releasedAt, month - 1);
-
-    paymentSchedule.push({
-      loanId: loan.id,
-      paymentNumber: month,
-      dueDate: Timestamp.fromDate(dueDate),
-      amount: totalMonthlyPayment,
-      status: 'pending',
-      penalty: 0,
-    });
-
-    beginningBalance -= principalPayment;
-    totalPrincipalPaid += principalPayment;
-  }
+  );
 
   return paymentSchedule;
 };
@@ -168,30 +139,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     };
   }, [rawLoan]);
 
-  const paymentsQuery = useMemoFirebase(() => {
-    if (!firestore || !loanId) return null;
-    return query(
-      collection(firestore, 'loans', loanId, 'payments'),
-      orderBy('paymentNumber', 'asc')
-    );
-  }, [firestore, loanId]);
-
-  const { data: paymentsData } = useCollection<Payment>(paymentsQuery);
-
-  const localShortfall = React.useMemo(() => {
-    if (!paymentsData) return 0;
-    return paymentsData.reduce((acc: number, p: Payment) => {
-      if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
-        return acc + Math.max(0, p.amount - (Number(p.actualAmountPaid) || 0));
-      }
-      return acc;
-    }, 0);
-  }, [paymentsData]);
-
-  const effectiveShortfallBucket = Math.max(loan?.historical_shortfall_bucket || 0, localShortfall);
-  // Full Settlement: Principal Shortfalls + 2% Monthly Penalty + 2% Maturity Surcharge (Total 104%)
-  const isSurchargePending = effectiveShortfallBucket > 0.01 && (loan?.final_surcharge_paid || 0) < (effectiveShortfallBucket * 1.04) - 0.01;
-
   React.useEffect(() => {
     if (showReleasePanel && loan?.status === 'approved') {
       setComputationDialogOpen(true);
@@ -237,7 +184,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         const batch = writeBatch(firestore);
 
         snapshot.docs.forEach((paymentDoc, index) => {
-          const dueDate = addMonths(releasedAtDate, index);
+          const dueDate = addMonths(releasedAtDate, index + 1);
           batch.update(paymentDoc.ref, {
             dueDate: Timestamp.fromDate(dueDate),
           });
@@ -251,44 +198,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
 
     regeneratePaymentSchedule();
   }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
-
-  // Fix: Auto-mark Month 1 as "Deducted / Paid" for released loans
-  // This repairs both newly released and already-released loans where Month 1 was missed.
-  React.useEffect(() => {
-    if (!loan || !firestore || loan.status !== 'released' || !loan.releasedAt || loan.paymentTerm <= 1) return;
-
-    const fixMonth1Payment = async () => {
-      try {
-        const paymentsRef = collection(firestore, 'loans', loanId, 'payments');
-        const paymentsQ = query(paymentsRef, orderBy('paymentNumber', 'asc'));
-        const snapshot = await getDocs(paymentsQ);
-        if (snapshot.empty) return;
-
-        const firstPaymentDoc = snapshot.docs[0];
-        const firstPaymentData = firstPaymentDoc.data();
-
-        // Only apply the fix if Month 1 is still pending and hasn't been manually marked
-        if (firstPaymentData.status === 'pending' && firstPaymentData.paymentNumber === 1) {
-          const releasedAtDate = loan.releasedAt instanceof Date
-            ? loan.releasedAt
-            : (loan.releasedAt as any).toDate();
-
-          await updateDocumentNonBlocking(firstPaymentDoc.ref, {
-            status: 'paid',
-            paymentDate: Timestamp.fromDate(releasedAtDate),
-            actualAmountPaid: firstPaymentData.amount,
-            remarks: 'Deducted from proceeds',
-            updatedAt: serverTimestamp(),
-          });
-        }
-      } catch (error) {
-        console.error('Error auto-marking Month 1 as paid:', error);
-      }
-    };
-
-    fixMonth1Payment();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loan?.status, firestore, loanId, paymentsData]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
@@ -330,25 +239,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     if (!firestore || !loan || !loanRef) return;
     setIsSubmitting(true);
     try {
-      // Ensure a users/{uid} doc exists so security rules that look up by UID succeed.
-      try {
-        if (user) {
-          const userRef = doc(firestore, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            await setDoc(userRef, {
-              email: user.email || '',
-              name: user.displayName || '',
-              role: 'user',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error ensuring users/{uid} doc before release:', err);
-      }
-
       const releasedAtDate = new Date();
       const batch = writeBatch(firestore);
 
@@ -359,35 +249,12 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       });
 
       const paymentSchedule = generatePaymentSchedule(loan, releasedAtDate);
-      paymentSchedule.forEach((payment, index) => {
+      paymentSchedule.forEach((payment) => {
         const paymentRef = doc(collection(firestore, 'loans', loanId, 'payments'));
-        
-        // Auto-mark Month 1 as paid if it was deducted from proceeds
-        if (index === 0 && loan.paymentTerm > 1) {
-          payment.status = 'paid';
-          payment.paymentDate = Timestamp.fromDate(releasedAtDate);
-          payment.actualAmountPaid = payment.amount;
-          payment.remarks = 'Deducted from proceeds';
-        }
-        
         batch.set(paymentRef, payment);
       });
 
       await batch.commit();
-
-      // If this is a renewal, auto-close the old loan
-      if (loan.renewalOf) {
-        try {
-          const oldLoanRef = doc(firestore, 'loans', loan.renewalOf);
-          await updateDocumentNonBlocking(oldLoanRef, {
-            status: 'fully-paid',
-            updatedAt: serverTimestamp(),
-            remarks: (loan.remarks ? loan.remarks + " | " : "") + `Closed via Renewal #${loan.loanNumber}`,
-          });
-        } catch (err) {
-          console.error("Error auto-closing old loan during renewal:", err);
-        }
-      }
 
       toast({
         title: 'Loan Released',
@@ -416,47 +283,42 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       });
       return;
     }
-
-    if (!user || !userRole || !loan || !loanRef) return;
-
-    const newReview = {
-      role: userRole,
-      status: 'denied' as const,
-      name: user.displayName || 'Unknown',
-      timestamp: serverTimestamp(),
-    };
-
-    const updatedReviews = {
-      ...(loan.reviews || {}),
-      [user.uid]: newReview,
-    };
-
-    // Veto Logic: Any denial results in the loan being denied
-    await handleUpdate({ 
-      reviews: updatedReviews,
-      status: 'denied',
-      denialRemarks 
-    });
-    
+    await handleUpdate({ status: 'denied', denialRemarks });
     setDenyDialogOpen(false);
     setDenialRemarks('');
   };
 
   const handleDelete = async () => {
-    if (!loanRef) return;
+    if (!loanRef || !firestore) return;
     setIsSubmitting(true);
     try {
-      deleteDocumentNonBlocking(loanRef);
+      // First delete all payments in the subcollection
+      const paymentsRef = collection(firestore, 'loans', loanId, 'payments');
+      const paymentsSnapshot = await getDocs(paymentsRef);
+      
+      if (!paymentsSnapshot.empty) {
+        const batch = writeBatch(firestore);
+        paymentsSnapshot.docs.forEach((paymentDoc) => {
+          batch.delete(paymentDoc.ref);
+        });
+        await batch.commit();
+      }
+
+      // Then delete the loan document itself
+      const { deleteDoc: deleteDocument } = await import('firebase/firestore');
+      await deleteDocument(loanRef);
+
       toast({
         title: 'Loan Deleted',
-        description: 'The loan application has been successfully deleted.',
+        description: 'The loan application and all associated payments have been deleted.',
       });
-      router.push('/');
+      router.replace('/');
     } catch (error) {
+      console.error('Delete failed:', error);
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
-        description: (error as Error).message,
+        description: (error as Error).message || 'An unknown error occurred.',
       });
       setIsSubmitting(false);
     }
@@ -473,51 +335,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       setRequirementDialogOpen(true);
       return;
     }
-
-    if (!user || !userRole || !loanRef) return;
-
-    const newReview = {
-      role: userRole,
-      status: 'approved' as const,
-      name: user.displayName || 'Unknown',
-      timestamp: serverTimestamp(),
-    };
-
-    const updatedReviews = {
-      ...(loan.reviews || {}),
-      [user.uid]: newReview,
-    };
-
-    // Consensus Logic: Check if we have two distinct eligible approvals
-    const allReviews = Object.values(updatedReviews).filter(r => r.status === 'approved');
-    const seniorReviewers = allReviews.filter(r => 
-      ['admin', 'creditCommitteeMember', 'creditCommitteeOfficer'].includes(r.role || '')
-    );
-
-    const hasMemberApproved = seniorReviewers.some(r => r.role === 'creditCommitteeMember' || r.role === 'admin');
-    
-    // Officer slot is satisfied by an actual officer, OR a second senior reviewer if the first slot is filled.
-    // Basically, we need one from each role category or two different seniors.
-    const hasOfficerApproved = seniorReviewers.some(r => r.role === 'creditCommitteeOfficer') || 
-                               seniorReviewers.length >= 2;
-
-    const updates: Partial<LoanWrite> = {
-      reviews: updatedReviews,
-    };
-
-    if (hasMemberApproved && hasOfficerApproved && seniorReviewers.length >= 2) {
-      updates.status = 'approved';
-    }
-
-    handleUpdate(updates);
-  };
-
-  const handleBackClick = () => {
-    if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel) && onBack) {
-      onBack();
-    } else {
-      router.back();
-    }
+    handleUpdate({ status: 'approved' });
   };
 
   const handleDenyClick = () => {
@@ -604,7 +422,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         <p className="mb-4">
           This loan application could not be found. It might have been deleted.
         </p>
-        <Button onClick={() => router.push('/')}>Go to Dashboard</Button>
+        <Button onClick={() => router.replace('/')}>Go to Dashboard</Button>
       </div>
     );
   }
@@ -614,19 +432,19 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     createdAt: loan.createdAt.toISOString(),
     updatedAt: loan.updatedAt.toISOString(),
     releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
-    final_surcharge_date: loan.final_surcharge_date ? (loan.final_surcharge_date instanceof Date ? loan.final_surcharge_date.toISOString() : (loan.final_surcharge_date as any).toDate().toISOString()) : undefined,
+    final_surcharge_date: loan.final_surcharge_date ? (loan.final_surcharge_date as Date).toISOString() : undefined,
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
   const isAdmin = userRole === 'admin';
   const isPayrollCheckerRole = userRole === 'payrollChecker' || isAdmin;
   const isBookkeeperRole = userRole === 'bookkeeper' || isAdmin;
-  const isApproverRole = userRole === 'creditCommitteeMember' || userRole === 'creditCommitteeOfficer' || isAdmin;
+  const isApproverRole = userRole === 'approver' || isAdmin;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" onClick={handleBackClick}>
+        <Button variant="outline" size="icon" onClick={() => onBack ? onBack() : router.back()}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
@@ -656,25 +474,15 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               <InfoItem label="Purpose" value={loan.purpose} />
               <InfoItem
                 label="Amount"
-                value={new Intl.NumberFormat('en-PH', {
+                value={new Intl.NumberFormat('en-US', {
                   style: 'currency',
                   currency: 'PHP',
                 }).format(loan.amount)}
               />
-              <InfoItem label="Payment Term" value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''}`} />
-              {loan.renewalOf && (
-                <>
-                  <InfoItem label="Renewal Of" value={`Loan #${loan.renewalOf.slice(-4).toUpperCase()}`} />
-                  <InfoItem 
-                    label="Outstanding Balance Deducted" 
-                    value={<span className="text-red-500">- ₱{(loan.outstandingBalanceAtRenewal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>} 
-                  />
-                  <div className="flex justify-between items-center py-2 bg-amber-500/5 rounded-md px-2 border border-amber-500/10">
-                    <p className="text-sm font-bold text-amber-700">Net Proceeds</p>
-                    <p className="text-sm font-black text-amber-600">₱{(loan.netProceeds || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                </>
-              )}
+              <InfoItem
+                label="Payment Term"
+                value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''}`}
+              />
               <InfoItem label="Created" value={format(loan.createdAt, 'PP')} />
               {loan.remarks && <InfoItem label="Remarks" value={loan.remarks} />}
             </CardContent>
@@ -701,7 +509,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                 size="sm"
                 className="w-full"
                 onClick={() => setDeleteDialogOpen(true)}
-                disabled={isSubmitting || userRole !== 'admin'}
+                disabled={isSubmitting || !userRole || (userRole === 'bookkeeper' && loan.status !== 'pending') || (!isAdmin && userRole !== 'bookkeeper')}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Loan
@@ -830,67 +638,29 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
 
               {/* Approval Actions (Approver) */}
               {loan.status === 'pending' && loan.payrollChecked && (
-                <div className="space-y-4">
-                  <div className="p-3 bg-muted/30 rounded-lg border border-border">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Review Status</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>CC Member:</span>
-                        {Object.values(loan.reviews || {}).some(r => (r.role === 'creditCommitteeMember' || r.role === 'admin') && r.status === 'approved') ? (
-                          <Badge className="bg-green-600/20 text-green-600 border-green-600/20">Approved</Badge>
-                        ) : Object.values(loan.reviews || {}).some(r => (r.role === 'creditCommitteeMember' || r.role === 'admin') && r.status === 'denied') ? (
-                          <Badge variant="destructive">Denied</Badge>
-                        ) : (
-                          <Badge variant="outline">Pending</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span>CC Officer:</span>
-                        {Object.values(loan.reviews || {}).some(r => r.role === 'creditCommitteeOfficer' && r.status === 'approved') || 
-                         Object.values(loan.reviews || {}).filter(r => r.status === 'approved' && ['admin', 'creditCommitteeMember', 'creditCommitteeOfficer'].includes(r.role)).length >= 2 ? (
-                          <Badge className="bg-green-600/20 text-green-600 border-green-600/20">Approved</Badge>
-                        ) : Object.values(loan.reviews || {}).some(r => r.role === 'creditCommitteeOfficer' && r.status === 'denied') ? (
-                          <Badge variant="destructive">Denied</Badge>
-                        ) : (
-                          <Badge variant="outline">Pending</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Approval Required</p>
+                  <div className="flex gap-2">
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setComputationDialogOpen(true)}
-                    >
-                      <Calculator className="h-4 w-4 mr-2" />
-                      View Computation
-                    </Button>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      className="flex-1"
                       onClick={handleApproveClick}
-                      disabled={isSubmitting || !isApproverRole || (!!user && loan.reviews?.[user.uid]?.status === 'approved')}
+                      disabled={isSubmitting || !isApproverRole}
+                      className="flex-1"
                     >
-                      <ThumbsUp className="mr-2 h-4 w-4" />
-                      Approve
+                      <ThumbsUp className="mr-2 h-4 w-4" /> Approve
                     </Button>
                     <Button
+                      size="sm"
                       variant="destructive"
-                      className="flex-1"
                       onClick={handleDenyClick}
                       disabled={isSubmitting || !isApproverRole}
+                      className="flex-1"
                     >
-                      <ThumbsDown className="mr-2 h-4 w-4" />
-                      Deny
+                      <ThumbsDown className="mr-2 h-4 w-4" /> Deny
                     </Button>
                   </div>
                   {!isApproverRole && (
-                    <p className="text-xs text-muted-foreground">Only committee members/officers can review loans</p>
+                    <p className="text-xs text-muted-foreground">Only approver can approve/deny loans</p>
                   )}
                 </div>
               )}
@@ -914,39 +684,25 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               )}
 
               {/* Collection Phase */}
-              {(loan.status as string) === 'released' || (loan.status as string) === 'fully-paid' ? (
+              {['released', 'fully-paid'].includes(loan.status) && (
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Collection Phase</p>
-                  {isSurchargePending ? (
-                    <div className="p-3 bg-amber-950/20 border border-amber-500/50 rounded-lg space-y-2">
-                       <div className="flex items-center gap-2 text-amber-500 font-bold">
-                          <Calculator className="h-4 w-4" />
-                          Final Settlement Audit
-                       </div>
-                       <p className="text-xs text-amber-200/80 leading-relaxed">
-                          Shortfalls of ₱{effectiveShortfallBucket.toLocaleString()} detected. 
-                          A total settlement of **₱{(effectiveShortfallBucket * 1.04).toLocaleString()}** (Principal + 4% Surcharge) is required to close this loan.
-                       </p>
-                    </div>
-                  ) : loan.status === 'released' && (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => setComputationDialogOpen(true)}
-                    >
-                      <Calculator className="mr-2 h-4 w-4" />
-                      View Computation
-                    </Button>
-                  )}
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => setComputationDialogOpen(true)}
+                  >
+                    <Calculator className="mr-2 h-4 w-4" />
+                    View Computation
+                  </Button>
                 </div>
-              ) : null}
+              )}
 
               {/* Completed/Denied */}
-              {loan.status === 'fully-paid' && !isSurchargePending && (
-                <div className="text-center py-4 bg-green-50 rounded-lg border border-green-100">
+              {loan.status === 'fully-paid' && (
+                <div className="text-center py-4">
                   <Check className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-bold text-green-700 uppercase tracking-wider">Loan Fully Processed</p>
-                  <p className="text-xs text-green-600">All payments and audits cleared.</p>
+                  <p className="text-sm font-medium text-green-700">Loan Fully Paid</p>
                 </div>
               )}
 
@@ -984,34 +740,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                     <Check className="h-4 w-4 text-green-500" /> : 
                     <X className="h-4 w-4 text-muted-foreground" />
                   }
-                </div>
-              </div>
-              
-              <Separator className="my-2" />
-              
-              <div className="flex items-center justify-between">
-                <Label>CC Member Verified</Label>
-                <div className="text-sm">
-                  {Object.values(loan.reviews || {}).some(r => (r.role === 'creditCommitteeMember' || r.role === 'admin') && r.status === 'approved') ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : Object.values(loan.reviews || {}).some(r => (r.role === 'creditCommitteeMember' || r.role === 'admin') && r.status === 'denied') ? (
-                    <X className="h-4 w-4 text-red-500" />
-                  ) : (
-                    <X className="h-4 w-4 text-muted-foreground opacity-50" />
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <Label>CC Officer Verified</Label>
-                <div className="text-sm">
-                  {Object.values(loan.reviews || {}).some(r => r.role === 'creditCommitteeOfficer' && r.status === 'approved') || 
-                   Object.values(loan.reviews || {}).filter(r => r.status === 'approved' && ['admin', 'creditCommitteeMember', 'creditCommitteeOfficer'].includes(r.role)).length >= 2 ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : Object.values(loan.reviews || {}).some(r => r.role === 'creditCommitteeOfficer' && r.status === 'denied') ? (
-                    <X className="h-4 w-4 text-red-500" />
-                  ) : (
-                    <X className="h-4 w-4 text-muted-foreground opacity-50" />
-                  )}
                 </div>
               </div>
             </CardContent>

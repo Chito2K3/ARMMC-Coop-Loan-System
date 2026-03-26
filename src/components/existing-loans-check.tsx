@@ -186,18 +186,16 @@ export function ExistingLoansCheck({
   const existingLoansQuery = useMemoFirebase(() => {
     if (!shouldQuery) return null;
     const loansRef = collection(firestore, "loans");
-    const activeStatuses = ["pending", "approved", "released"];
     return query(
       loansRef,
-      where("applicantName", "==", applicantName),
-      where("status", "in", activeStatuses)
+      where("applicantName", "==", applicantName)
     );
   }, [firestore, applicantName, shouldQuery]);
 
   const { data: loans, isLoading } = useCollection<Loan>(existingLoansQuery);
 
   const existingLoans = useMemoFirebase(
-    () => loans?.filter((loan) => loan.id !== currentLoanId),
+    () => loans?.filter((loan) => loan.id !== currentLoanId && ["pending", "approved", "released"].includes(loan.status)),
     [loans, currentLoanId]
   );
 

@@ -123,7 +123,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUser();
-  const { showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showPenaltyPanel, showReleasePanel } = useApprovalPanel();
+  const { showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel, setSelectedLoanId } = useApprovalPanel();
   const [userRole, setUserRole] = React.useState<string | null>(null);
   const [requirementDialogOpen, setRequirementDialogOpen] = React.useState(false);
   const [requirementMessage, setRequirementMessage] = React.useState('');
@@ -155,6 +155,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       createdAt: toDate(rawLoan.createdAt) || new Date(),
       updatedAt: toDate(rawLoan.updatedAt) || new Date(),
       releasedAt: toDate(rawLoan.releasedAt) || undefined,
+      final_surcharge_date: toDate(rawLoan.final_surcharge_date) || undefined,
       loanNumber: rawLoan.loanNumber || 0,
     };
   }, [rawLoan]);
@@ -403,10 +404,11 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   };
 
   const handleBackClick = () => {
-    if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel) && onBack) {
+    if (onBack) {
       onBack();
     } else {
       router.push('/');
+      setSelectedLoanId(null);
     }
   };
 
@@ -489,12 +491,279 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     createdAt: loan.createdAt.toISOString(),
     updatedAt: loan.updatedAt.toISOString(),
     releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
+    final_surcharge_date: loan.final_surcharge_date ? (loan.final_surcharge_date as Date).toISOString() : undefined,
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
   const isPayrollCheckerRole = userRole === 'payrollChecker';
   const isBookkeeperRole = userRole === 'bookkeeper';
   const isApproverRole = userRole === 'approver';
+
+  const isReleasedOrPaid = loan.status === 'released' || loan.status === 'fully-paid';
+
+  const basicInfoCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Basic Information</CardTitle>
+        <CardDescription>Core loan details</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <InfoItem label="Loan Type" value={loan.loanType} />
+        <InfoItem label="Purpose" value={loan.purpose} />
+        <InfoItem
+          label="Amount"
+          value={new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'PHP',
+          }).format(loan.amount)}
+        />
+        <InfoItem
+          label="Payment Term"
+          value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''}`}
+        />
+        <InfoItem label="Created" value={format(loan.createdAt, 'PP')} />
+        {loan.remarks && <InfoItem label="Remarks" value={loan.remarks} />}
+      </CardContent>
+    </Card>
+  );
+
+  const managementCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Management</CardTitle>
+        <CardDescription>Edit and manage loan</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Button
+          size="sm"
+          variant="default"
+          className="w-full"
+          onClick={() => setSheetOpen(true)}
+          disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+        >
+          <FilePenLine className="h-4 w-4 mr-2" />
+          Edit Loan
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="w-full"
+          onClick={() => setDeleteDialogOpen(true)}
+          disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete Loan
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
+  const workflowCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Workflow Progress</CardTitle>
+        <CardDescription>Current status: <StatusBadge status={loan.status} /></CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'}`}>
+            <ClipboardCheck className={`h-5 w-5 ${['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Created</p>
+              <p className="text-xs text-muted-foreground">{format(loan.createdAt, 'PP')}</p>
+            </div>
+            {['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
+          </div>
+
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && (!loan.salary || loan.salary === 0) ? 'bg-yellow-50 border border-yellow-200' : 'bg-muted/50'}`}>
+            <DollarSign className={`h-5 w-5 ${loan.payrollChecked ? 'text-green-500' : 'text-yellow-500'}`} />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Salary Input</p>
+              <p className="text-xs text-muted-foreground">{loan.salary ? `₱${loan.salary.toLocaleString()}` : 'Pending input'}</p>
+            </div>
+            {loan.payrollChecked && <Check className="h-4 w-4 text-green-500" />}
+          </div>
+
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.payrollChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'}`}>
+            <ThumbsUp className={`h-5 w-5 ${['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : loan.status === 'denied' ? 'text-red-500' : 'text-muted-foreground'}`} />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Approval</p>
+              <p className="text-xs text-muted-foreground">{loan.status === 'approved' ? 'Approved' : loan.status === 'denied' ? 'Denied' : 'Pending approval'}</p>
+            </div>
+            {['approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
+            {loan.status === 'denied' && <X className="h-4 w-4 text-red-500" />}
+          </div>
+
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-muted/50'}`}>
+            <Banknote className={`h-5 w-5 ${['released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Fund Release</p>
+              <p className="text-xs text-muted-foreground">{loan.releasedAt ? format(loan.releasedAt, 'PP') : 'Pending release'}</p>
+            </div>
+            {['released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
+          </div>
+        </div>
+
+        {loan.status === 'denied' && loan.denialRemarks && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="font-medium text-sm text-red-800">Denial Reason</p>
+            <p className="text-sm text-red-700">{loan.denialRemarks}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const currentActionCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Current Action</CardTitle>
+        <CardDescription>What needs to be done next</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loan.status === 'pending' && (!loan.salary || loan.salary === 0) && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Salary Input Required</p>
+            <div className="relative flex items-center">
+              <span className="absolute left-2 text-muted-foreground">₱</span>
+              <Input
+                type="number"
+                key={loan.id}
+                defaultValue={loan.salary || 0}
+                placeholder="Enter salary"
+                onBlur={(e) => {
+                  const salaryValue = Number(e.target.value) || 0;
+                  if (salaryValue !== loan.salary) {
+                    handleUpdate({
+                      salary: salaryValue,
+                      payrollChecked: salaryValue > 0
+                    });
+                  }
+                }}
+                className="pl-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                disabled={isSubmitting || !isPayrollCheckerRole}
+              />
+            </div>
+            {!isPayrollCheckerRole && (
+              <p className="text-xs text-muted-foreground">Only payroll checker can input salary</p>
+            )}
+          </div>
+        )}
+
+        {loan.status === 'pending' && loan.payrollChecked && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Approval Required</p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleApproveClick}
+                disabled={isSubmitting || !isApproverRole}
+                className="flex-1"
+              >
+                <ThumbsUp className="mr-2 h-4 w-4" /> Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleDenyClick}
+                disabled={isSubmitting || !isApproverRole}
+                className="flex-1"
+              >
+                <ThumbsDown className="mr-2 h-4 w-4" /> Deny
+              </Button>
+            </div>
+            {!isApproverRole && (
+              <p className="text-xs text-muted-foreground">Only approver can approve/deny loans</p>
+            )}
+          </div>
+        )}
+
+        {loan.status === 'approved' && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Ready for Release</p>
+            <Button
+              className="w-full"
+              onClick={() => setComputationDialogOpen(true)}
+              disabled={!isBookkeeperRole}
+            >
+              <Calculator className="mr-2 h-4 w-4" />
+              View Computation & Release
+            </Button>
+            {!isBookkeeperRole && (
+              <p className="text-xs text-muted-foreground">Only bookkeeper can release funds</p>
+            )}
+          </div>
+        )}
+
+        {['released', 'fully-paid'].includes(loan.status) && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Collection Phase</p>
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => setComputationDialogOpen(true)}
+            >
+              <Calculator className="mr-2 h-4 w-4" />
+              View Computation
+            </Button>
+          </div>
+        )}
+
+        {loan.status === 'fully-paid' && (
+          <div className="text-center py-4">
+            <Check className="h-8 w-8 text-green-500 mx-auto mb-2" />
+            <p className="text-sm font-medium text-green-700">Loan Fully Paid</p>
+          </div>
+        )}
+
+        {loan.status === 'denied' && (
+          <div className="text-center py-4">
+            <X className="h-8 w-8 text-red-500 mx-auto mb-2" />
+            <p className="text-sm font-medium text-red-700">Loan Denied</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const verificationCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Verification Status</CardTitle>
+        <CardDescription>Required checks</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label>Bookkeeper Verified</Label>
+          <div className="text-sm">
+            {loan.bookkeeperChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-muted-foreground" />}
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <Label>Payroll Verified</Label>
+          <div className="text-sm">
+            {loan.payrollChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-muted-foreground" />}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const loanHistoryCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Loan History</CardTitle>
+        <CardDescription>Important dates</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <InfoItem label="Created" value={format(loan.createdAt, 'PPpp')} />
+        <InfoItem label="Last Updated" value={format(loan.updatedAt, 'PPpp')} />
+        {loan.releasedAt && (
+          <InfoItem label="Released" value={format(loan.releasedAt, 'PPpp')} />
+        )}
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -516,307 +785,38 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Column 1: Basic Information */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-              <CardDescription>Core loan details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <InfoItem label="Loan Type" value={loan.loanType} />
-              <InfoItem label="Purpose" value={loan.purpose} />
-              <InfoItem
-                label="Amount"
-                value={new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'PHP',
-                }).format(loan.amount)}
-              />
-              <InfoItem
-                label="Payment Term"
-                value={`${loan.paymentTerm} month${loan.paymentTerm > 1 ? 's' : ''}`}
-              />
-              <InfoItem label="Created" value={format(loan.createdAt, 'PP')} />
-              {loan.remarks && <InfoItem label="Remarks" value={loan.remarks} />}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Management</CardTitle>
-              <CardDescription>Edit and manage loan</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full"
-                onClick={() => setSheetOpen(true)}
-                disabled={loan.status === 'fully-paid' || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
-              >
-                <FilePenLine className="h-4 w-4 mr-2" />
-                Edit Loan
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="w-full"
-                onClick={() => setDeleteDialogOpen(true)}
-                disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Loan
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Column 2: Workflow Progress */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Workflow Progress</CardTitle>
-              <CardDescription>Current status: <StatusBadge status={loan.status} /></CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Progress Timeline */}
-              <div className="space-y-4">
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'
-                  }`}>
-                  <ClipboardCheck className={`h-5 w-5 ${['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
-                    }`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Created</p>
-                    <p className="text-xs text-muted-foreground">{format(loan.createdAt, 'PP')}</p>
-                  </div>
-                  {['pending', 'approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
-                </div>
-
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && (!loan.salary || loan.salary === 0) ? 'bg-yellow-50 border border-yellow-200' : 'bg-muted/50'
-                  }`}>
-                  <DollarSign className={`h-5 w-5 ${loan.payrollChecked ? 'text-green-500' : 'text-yellow-500'
-                    }`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Salary Input</p>
-                    <p className="text-xs text-muted-foreground">
-                      {loan.salary ? `₱${loan.salary.toLocaleString()}` : 'Pending input'}
-                    </p>
-                  </div>
-                  {loan.payrollChecked && <Check className="h-4 w-4 text-green-500" />}
-                </div>
-
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.payrollChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'
-                  }`}>
-                  <ThumbsUp className={`h-5 w-5 ${['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' :
-                      loan.status === 'denied' ? 'text-red-500' : 'text-muted-foreground'
-                    }`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Approval</p>
-                    <p className="text-xs text-muted-foreground">
-                      {loan.status === 'approved' ? 'Approved' :
-                        loan.status === 'denied' ? 'Denied' : 'Pending approval'}
-                    </p>
-                  </div>
-                  {['approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
-                  {loan.status === 'denied' && <X className="h-4 w-4 text-red-500" />}
-                </div>
-
-                <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-muted/50'
-                  }`}>
-                  <Banknote className={`h-5 w-5 ${['released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : 'text-muted-foreground'
-                    }`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Fund Release</p>
-                    <p className="text-xs text-muted-foreground">
-                      {loan.releasedAt ? format(loan.releasedAt, 'PP') : 'Pending release'}
-                    </p>
-                  </div>
-                  {['released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
-                </div>
-              </div>
-
-              {loan.status === 'denied' && loan.denialRemarks && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="font-medium text-sm text-red-800">Denial Reason</p>
-                  <p className="text-sm text-red-700">{loan.denialRemarks}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Current Action Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Action</CardTitle>
-              <CardDescription>What needs to be done next</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Salary Input (Payroll Checker) */}
-              {loan.status === 'pending' && (!loan.salary || loan.salary === 0) && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Salary Input Required</p>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-2 text-muted-foreground">₱</span>
-                    <Input
-                      type="number"
-                      key={loan.id}
-                      defaultValue={loan.salary || 0}
-                      placeholder="Enter salary"
-                      onBlur={(e) => {
-                        const salaryValue = Number(e.target.value) || 0;
-                        if (salaryValue !== loan.salary) {
-                          handleUpdate({
-                            salary: salaryValue,
-                            payrollChecked: salaryValue > 0
-                          });
-                        }
-                      }}
-                      className="pl-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      disabled={isSubmitting || !isPayrollCheckerRole}
-                    />
-                  </div>
-                  {!isPayrollCheckerRole && (
-                    <p className="text-xs text-muted-foreground">Only payroll checker can input salary</p>
-                  )}
-                </div>
-              )}
-
-              {/* Approval Actions (Approver) */}
-              {loan.status === 'pending' && loan.payrollChecked && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Approval Required</p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleApproveClick}
-                      disabled={isSubmitting || !isApproverRole}
-                      className="flex-1"
-                    >
-                      <ThumbsUp className="mr-2 h-4 w-4" /> Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={handleDenyClick}
-                      disabled={isSubmitting || !isApproverRole}
-                      className="flex-1"
-                    >
-                      <ThumbsDown className="mr-2 h-4 w-4" /> Deny
-                    </Button>
-                  </div>
-                  {!isApproverRole && (
-                    <p className="text-xs text-muted-foreground">Only approver can approve/deny loans</p>
-                  )}
-                </div>
-              )}
-
-              {/* Release Fund (Bookkeeper) */}
-              {loan.status === 'approved' && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Ready for Release</p>
-                  <Button
-                    className="w-full"
-                    onClick={() => setComputationDialogOpen(true)}
-                    disabled={!isBookkeeperRole}
-                  >
-                    <Calculator className="mr-2 h-4 w-4" />
-                    View Computation & Release
-                  </Button>
-                  {!isBookkeeperRole && (
-                    <p className="text-xs text-muted-foreground">Only bookkeeper can release funds</p>
-                  )}
-                </div>
-              )}
-
-              {/* Collection Phase */}
-              {['released', 'fully-paid'].includes(loan.status) && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Collection Phase</p>
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => setComputationDialogOpen(true)}
-                  >
-                    <Calculator className="mr-2 h-4 w-4" />
-                    View Computation
-                  </Button>
-                </div>
-              )}
-
-              {/* Completed/Denied */}
-              {loan.status === 'fully-paid' && (
-                <div className="text-center py-4">
-                  <Check className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-700">Loan Fully Paid</p>
-                </div>
-              )}
-
-              {loan.status === 'denied' && (
-                <div className="text-center py-4">
-                  <X className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-red-700">Loan Denied</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Column 3: Additional Info & Actions */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Verification Status</CardTitle>
-              <CardDescription>Required checks</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>Bookkeeper Verified</Label>
-                <div className="text-sm">
-                  {loan.bookkeeperChecked ?
-                    <Check className="h-4 w-4 text-green-500" /> :
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  }
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <Label>Payroll Verified</Label>
-                <div className="text-sm">
-                  {loan.payrollChecked ?
-                    <Check className="h-4 w-4 text-green-500" /> :
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  }
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Loan History</CardTitle>
-              <CardDescription>Important dates</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <InfoItem label="Created" value={format(loan.createdAt, 'PPpp')} />
-              <InfoItem label="Last Updated" value={format(loan.updatedAt, 'PPpp')} />
-              {loan.releasedAt && (
-                <InfoItem label="Released" value={format(loan.releasedAt, 'PPpp')} />
-              )}
-            </CardContent>
-          </Card>
-
-          <ExistingLoansCheck
-            applicantName={loan.applicantName}
-            currentLoanId={loan.id}
-          />
-        </div>
-      </div>
-
-      {/* Collection Schedule - Full Width */}
-      {(loan.status === 'released' || loan.status === 'fully-paid') && loan.releasedAt && (
-        <div className="mt-6">
+      {isReleasedOrPaid && loan.releasedAt && (
+        <div className="mb-6">
           <CollectionSchedule loan={loan} userRole={userRole} />
+        </div>
+      )}
+
+      {isReleasedOrPaid ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            {basicInfoCard}
+            {managementCard}
+          </div>
+          <div className="space-y-6">
+            {loanHistoryCard}
+            <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6">
+            {basicInfoCard}
+            {managementCard}
+          </div>
+          <div className="space-y-6">
+            {workflowCard}
+            {currentActionCard}
+          </div>
+          <div className="space-y-6">
+            {verificationCard}
+            {loanHistoryCard}
+            <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
+          </div>
         </div>
       )}
 

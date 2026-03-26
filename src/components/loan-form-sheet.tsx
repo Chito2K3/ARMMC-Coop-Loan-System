@@ -47,6 +47,7 @@ import {
 } from "@/firebase/non-blocking-updates";
 import { getNextLoanNumber } from "@/firebase/counter";
 import type { LoanSerializable, LoanType, LoanPurpose } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const paymentTermOptions = [1, 3, 4, 6, 9, 12, 18, 24];
 
@@ -55,8 +56,8 @@ const loanFormSchema = z.object({
     message: "Applicant name must be at least 2 characters.",
   }),
   amount: z.coerce
-    .number({ message: "Please enter a valid number." })
-    .positive("Loan amount must be positive."),
+    .number({ required_error: "Amount is required", invalid_type_error: "Amount must be a number" })
+    .positive("Loan amount must be greater than 0."),
   paymentTerm: z.coerce
     .number()
     .refine((val) => paymentTermOptions.includes(val), {
@@ -83,15 +84,18 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
   const router = useRouter();
   const { toast } = useToast();
 
-  const [loanTypes, setLoanTypes] = React.useState<{ id: string, name: string }[]>([]);
-  const [loanPurposes, setLoanPurposes] = React.useState<{ id: string, name: string }[]>([]);
+  const [loanTypes, setLoanTypes] = React.useState<{ id: string; name: string }[]>([]);
+  const [loanPurposes, setLoanPurposes] = React.useState<{ id: string; name: string }[]>([]);
   const [eligibleLoans, setEligibleLoans] = React.useState<any[]>([]);
   const [selectedOldLoan, setSelectedOldLoan] = React.useState<any>(null);
+  const [currentStep, setCurrentStep] = React.useState(1);
 
   React.useEffect(() => {
     if (open && firestore) {
       getLoanTypes(firestore).then(setLoanTypes);
       getLoanPurposes(firestore).then(setLoanPurposes);
+    } else {
+      setCurrentStep(1);
     }
   }, [open, firestore]);
 
@@ -99,25 +103,25 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     resolver: zodResolver(loanFormSchema),
     defaultValues: isEditMode
       ? {
-        applicantName: loan.applicantName,
-        amount: loan.amount,
-        paymentTerm: loan.paymentTerm,
-        loanType: loan.loanType,
-        purpose: loan.purpose,
-        remarks: loan.remarks || "",
-        isRenewal: !!loan.renewalOf,
-        renewingLoanId: loan.renewalOf || "",
-      }
+          applicantName: loan.applicantName,
+          amount: loan.amount,
+          paymentTerm: loan.paymentTerm,
+          loanType: loan.loanType,
+          purpose: loan.purpose,
+          remarks: loan.remarks || "",
+          isRenewal: !!loan.renewalOf,
+          renewingLoanId: loan.renewalOf || "",
+        }
       : {
-        applicantName: "",
-        amount: 0,
-        paymentTerm: 6,
-        loanType: "",
-        purpose: "",
-        remarks: "",
-        isRenewal: false,
-        renewingLoanId: "",
-      },
+          applicantName: "",
+          amount: 0,
+          paymentTerm: 6,
+          loanType: "",
+          purpose: "",
+          remarks: "",
+          isRenewal: false,
+          renewingLoanId: "",
+        },
   });
 
   const applicantName = form.watch("applicantName");
@@ -125,7 +129,6 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
   const renewingLoanId = form.watch("renewingLoanId");
   const loanAmount = form.watch("amount");
 
-  // Fetch active loans for the applicant to check for renewal eligibility
   React.useEffect(() => {
     const fetchApplicantLoans = async () => {
       if (!firestore || !applicantName || applicantName.length < 2 || !isRenewal) {
@@ -135,48 +138,51 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
 
       const q = query(
         collection(firestore, "loans"),
-        where("applicantName", "==", applicantName),
-        where("status", "==", "released")
+        where("applicantName", "==", applicantName)
       );
 
       const snap = await getDocs(q);
-      const loans = await Promise.all(snap.docs.map(async (loanDoc) => {
-        const data = loanDoc.data();
-        // Fetch payments to check eligibility
-        const paymentsSnap = await getDocs(collection(firestore, "loans", loanDoc.id, "payments"));
-        const payments = paymentsSnap.docs.map(d => d.data());
-        const totalPaid = payments.filter(p => p.status === 'paid').length;
-        const totalTerms = data.paymentTerm;
-        
-        let isEligible = false;
-        let reason = "";
+      const loans = await Promise.all(
+        snap.docs
+          .filter(doc => doc.data().status === "released")
+          .map(async (loanDoc) => {
+          const data = loanDoc.data();
+          const paymentsSnap = await getDocs(collection(firestore, "loans", loanDoc.id, "payments"));
+          const payments = paymentsSnap.docs.map((d) => d.data());
+          const totalPaid = payments.filter((p) => p.status === "paid").length;
+          const totalTerms = data.paymentTerm;
 
-        if (totalTerms === 3) {
-          isEligible = false;
-          reason = "3-month terms cannot be renewed.";
-        } else if (totalTerms === 9) {
-          isEligible = totalPaid >= 5;
-          reason = isEligible ? "" : "Must have ≥ 5 months paid.";
-        } else {
-          isEligible = totalPaid >= (totalTerms / 2);
-          reason = isEligible ? "" : "Must have ≥ 50% paid.";
-        }
+          let isEligible = false;
+          let reason = "";
 
-        // Calculate outstanding principal
-        const unpaidPrincipal = Math.round(payments
-          .filter(p => p.status === 'pending')
-          .reduce((acc, p) => acc + (p.amount || 0), 0) * 100) / 100;
+          if (totalTerms === 3) {
+            isEligible = false;
+            reason = "3-month terms cannot be renewed.";
+          } else if (totalTerms === 9) {
+            isEligible = totalPaid >= 5;
+            reason = isEligible ? "" : "Must have ≥ 5 months paid.";
+          } else {
+            isEligible = totalPaid >= totalTerms / 2;
+            reason = isEligible ? "" : "Must have ≥ 50% paid.";
+          }
 
-        return {
-          id: loanDoc.id,
-          loanNumber: data.loanNumber,
-          paymentTerm: data.paymentTerm,
-          totalPaid,
-          isEligible,
-          reason,
-          unpaidPrincipal,
-        };
-      }));
+          const unpaidPrincipal = Math.round(
+            payments
+              .filter((p) => p.status === "pending")
+              .reduce((acc, p) => acc + (p.amount || 0), 0) * 100
+          ) / 100;
+
+          return {
+            id: loanDoc.id,
+            loanNumber: data.loanNumber,
+            paymentTerm: data.paymentTerm,
+            totalPaid,
+            isEligible,
+            reason,
+            unpaidPrincipal,
+          };
+        })
+      );
 
       setEligibleLoans(loans);
     };
@@ -186,28 +192,15 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
 
   React.useEffect(() => {
     if (renewingLoanId) {
-      const selected = eligibleLoans.find(l => l.id === renewingLoanId);
+      const selected = eligibleLoans.find((l) => l.id === renewingLoanId);
       setSelectedOldLoan(selected || null);
     } else {
       setSelectedOldLoan(null);
     }
   }, [renewingLoanId, eligibleLoans]);
 
-  const netProceeds = React.useMemo(() => {
-    if (!isRenewal || !selectedOldLoan || !loanAmount) return null;
-    const calc = loanAmount - selectedOldLoan.unpaidPrincipal;
-    return Math.round(calc * 100) / 100;
-  }, [isRenewal, selectedOldLoan, loanAmount]);
-
   async function onSubmit(data: LoanFormValues) {
-    if (!firestore) {
-      toast({
-        variant: "destructive",
-        title: "An error occurred",
-        description: "Firestore is not available.",
-      });
-      return;
-    }
+    if (!firestore) return;
 
     try {
       if (isEditMode && loan) {
@@ -216,13 +209,9 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           ...data,
           updatedAt: serverTimestamp(),
         });
-        toast({
-          title: "Loan Update In Progress",
-          description: "The loan application is being updated.",
-        });
+        toast({ title: "Update In Progress" });
       } else {
         const loanNumber = await getNextLoanNumber(firestore);
-
         const newLoan = {
           ...data,
           loanNumber,
@@ -232,156 +221,209 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           payrollChecked: false,
           denialRemarks: "",
           renewalOf: data.isRenewal ? data.renewingLoanId : null,
-          netProceeds: data.isRenewal ? (Math.round((loanAmount - (selectedOldLoan?.unpaidPrincipal || 0)) * 100) / 100) : null,
-          outstandingBalanceAtRenewal: data.isRenewal ? (Math.round((selectedOldLoan?.unpaidPrincipal || 0) * 100) / 100) : null,
+          netProceeds: data.isRenewal ? Math.round((loanAmount - (selectedOldLoan?.unpaidPrincipal || 0)) * 100) / 100 : null,
+          outstandingBalanceAtRenewal: data.isRenewal ? Math.round((selectedOldLoan?.unpaidPrincipal || 0) * 100) / 100 : null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
 
-        const docRef = await addDocumentNonBlocking(
-          collection(firestore, "loans"),
-          newLoan
-        );
-
-        toast({
-          title: "Loan Created",
-          description: "The new loan application has been saved.",
-        });
-
-        if (docRef?.id) {
-          router.push(`/loan/${docRef.id}`);
-        }
+        const docRef = await addDocumentNonBlocking(collection(firestore, "loans"), newLoan);
+        toast({ title: "Loan Created" });
+        if (docRef?.id) router.push(`/loan/${docRef.id}`);
       }
-
       onOpenChange(false);
       form.reset();
     } catch (error) {
-      console.error('Error submitting loan:', error);
-      toast({
-        variant: "destructive",
-        title: "An error occurred",
-        description: error instanceof Error ? error.message : 'Failed to submit loan',
-      });
+      console.error("Error submitting loan:", error);
     }
   }
 
+  const steps = [
+    { title: "Account Details", description: "Applicant information" },
+    { title: "Loan Terms", description: "Pricing & duration" },
+    { title: "Review", description: "Final confirmation" },
+  ];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl flex flex-col">
-        <SheetHeader className="pb-6">
-          <SheetTitle className="text-2xl">
-            {isEditMode ? "Edit Loan Application" : "New Loan Application"}
-          </SheetTitle>
-          <SheetDescription className="text-base">
-            {isEditMode
-              ? "Update the details of the loan application."
-              : "Fill out the form to create a new loan application."}
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent side="left" className="w-full sm:max-w-[66vw] p-0 flex flex-row overflow-hidden bg-white border-r">
+        {/* Left Side: Step Progress */}
+        <div className="w-1/4 bg-[#FAFAFA] border-r flex flex-col p-12">
+          <div className="mb-12">
+            <h2 className="text-xl font-bold tracking-tight text-[#1A1A1A]">New Application</h2>
+            <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-semibold">Process steps</p>
+          </div>
+          
+          <div className="space-y-8 relative">
+            <div className="absolute left-[15px] top-2 bottom-2 w-[2px] bg-[#E2E8F0]" />
+            {steps.map((step, idx) => (
+              <div key={idx} className="flex gap-4 relative z-10">
+                <div className={cn(
+                  "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300",
+                  currentStep > idx + 1 ? "bg-green-500 text-white" : 
+                  currentStep === idx + 1 ? "bg-primary text-white scale-110 shadow-lg" : 
+                  "bg-white border-2 border-[#E2E8F0] text-muted-foreground"
+                )}>
+                  {currentStep > idx + 1 ? "✓" : idx + 1}
+                </div>
+                <div className="flex flex-col">
+                  <span className={cn(
+                    "text-sm font-bold transition-colors",
+                    currentStep === idx + 1 ? "text-primary" : "text-muted-foreground"
+                  )}>{step.title}</span>
+                  <span className="text-[10px] text-muted-foreground/60">{step.description}</span>
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <Form {...form}>
-          <form
-            id="loan-form"
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="flex-1 flex flex-col min-h-0"
-          >
-            <ScrollArea className="flex-1 pr-6 -mr-6">
-              <div className="space-y-8 py-4 pr-6">
-                {/* Applicant Name */}
-                <FormField
-                  control={form.control}
-                  name="applicantName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">Applicant Name</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="Juan Dela Cruz" 
-                          className="h-11 text-base"
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <div className="mt-auto">
+             <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
+                <p className="text-[10px] uppercase font-black text-primary/40 tracking-tighter">Draft Mode</p>
+                <p className="text-xs text-primary/80 leading-relaxed mt-1">Changes are saved to the secure cooperative ledger upon submission.</p>
+             </div>
+          </div>
+        </div>
 
-                {/* Loan Amount */}
-                <div className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-semibold">Loan Amount</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
-                              ₱
-                            </span>
-                            <Input
-                              type="number"
-                              placeholder="5000"
-                              className="pl-10 h-11 text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+        {/* Right Side: Form Area */}
+        <div className="flex-1 flex flex-col">
+          <SheetHeader className="p-12 pb-6 flex flex-row items-end justify-between space-y-0">
+             <div>
+                <SheetTitle className="text-3xl font-black text-[#1A1A1A] leading-none">
+                  {steps[currentStep-1].title}
+                </SheetTitle>
+                <SheetDescription className="text-base mt-2">
+                  Please provide the necessary details for this stage.
+                </SheetDescription>
+             </div>
+             <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
+                Close
+             </Button>
+          </SheetHeader>
 
-                  {/* Renewal Toggle */}
-                  <FormField
-                    control={form.control}
-                    name="isRenewal"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Loan Renewal</FormLabel>
-                          <div className="text-sm text-muted-foreground">
-                            Renew an existing active loan
-                          </div>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  {isRenewal && (
-                    <div className="space-y-4 pt-2">
-                       <FormField
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col min-h-0">
+              <ScrollArea className="flex-1 px-12">
+                <div className="py-6 max-w-2xl space-y-10">
+                  {currentStep === 1 && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <FormField
                         control={form.control}
-                        name="renewingLoanId"
+                        name="applicantName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-base font-semibold text-amber-600">Select Loan to Renew</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Full Name of Borrower</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Enter full name" 
+                                className="h-14 text-xl border-[#E2E8F0] shadow-none bg-[#FAFAFA]/50 focus:bg-white transition-all flex-1" 
+                                {...field} 
+                                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="bg-[#FAFAFA]/50 border border-[#E2E8F0] rounded-2xl p-6 space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="isRenewal"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between space-y-0">
+                              <div className="space-y-1">
+                                <FormLabel className="text-base font-bold text-[#1A1A1A]">Loan Renewal</FormLabel>
+                                <p className="text-sm text-muted-foreground">
+                                  Renew an existing active loan
+                                </p>
+                              </div>
                               <FormControl>
-                                <SelectTrigger className="h-11 border-amber-500/50">
-                                  <SelectValue placeholder="Select an active loan" />
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        {isRenewal && (
+                          <div className="pt-4 border-t border-[#E2E8F0] animate-in slide-in-from-top-2">
+                            <FormField
+                              control={form.control}
+                              name="renewingLoanId"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Select Loan to Renew</FormLabel>
+                                  {eligibleLoans.length === 0 ? (
+                                    <div className="text-sm text-amber-600 bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                      {applicantName.length < 2 
+                                        ? "Please enter the applicant's name first."
+                                        : "No active loans found for this applicant."}
+                                    </div>
+                                  ) : (
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger className="h-14 bg-white border-[#E2E8F0] shadow-none">
+                                          <SelectValue placeholder="Select an active loan" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        {eligibleLoans.map((loan) => (
+                                          <SelectItem 
+                                            key={loan.id} 
+                                            value={loan.id}
+                                            disabled={!loan.isEligible}
+                                          >
+                                            <div className="flex flex-col py-1">
+                                              <span className="font-medium">
+                                                Loan #{loan.loanNumber} 
+                                                {!loan.isEligible && " (Not Eligible)"}
+                                              </span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {loan.totalPaid} / {loan.paymentTerm} months paid
+                                                {!loan.isEligible && ` - ${loan.reason}`}
+                                              </span>
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            
+                            {selectedOldLoan && (
+                              <div className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/10 flex justify-between items-center">
+                                <span className="text-sm font-medium text-primary">Outstanding Principal</span>
+                                <span className="text-lg font-black text-primary">
+                                  ₱{selectedOldLoan.unpaidPrincipal.toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name="loanType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Service / Loan Category</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="h-14 text-lg border-[#E2E8F0] shadow-none">
+                                  <SelectValue placeholder="Select type" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {eligibleLoans.length === 0 ? (
-                                  <div className="p-4 text-sm text-muted-foreground text-center">No active loans found for this applicant</div>
-                                ) : (
-                                  eligibleLoans.map((l) => (
-                                    <SelectItem key={l.id} value={l.id} disabled={!l.isEligible}>
-                                      Loan #{l.loanNumber} ({l.paymentTerm}mo) - {l.totalPaid} paid 
-                                      {!l.isEligible && ` - [${l.reason}]`}
-                                    </SelectItem>
-                                  ))
-                                )}
+                                {loanTypes.map((t) => (
+                                  <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -389,169 +431,166 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                         )}
                       />
 
-                      {selectedOldLoan && (
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 space-y-3">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">New Principal:</span>
-                            <span className="font-bold">₱{loanAmount.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Unpaid Balance to Deduct:</span>
-                            <span className="font-bold text-red-500">-₱{selectedOldLoan.unpaidPrincipal.toLocaleString()}</span>
-                          </div>
-                          <Separator className="bg-amber-500/20" />
+                      <FormField
+                        control={form.control}
+                        name="purpose"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Intended Purpose</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="h-14 text-lg border-[#E2E8F0] shadow-none">
+                                  <SelectValue placeholder="Select purpose" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {loanPurposes.map((p) => (
+                                  <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {currentStep === 2 && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <FormField
+                        control={form.control}
+                        name="amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Requested Principal Amount</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-bold text-muted-foreground">₱</span>
+                                <Input 
+                                  type="number" 
+                                  className="pl-12 h-20 text-4xl font-black border-[#E2E8F0] shadow-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                  {...field} 
+                                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="paymentTerm"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Amortization Period</FormLabel>
+                            <div className="grid grid-cols-4 gap-2">
+                              {paymentTermOptions.map((term) => (
+                                <button
+                                  key={term}
+                                  type="button"
+                                  onClick={() => field.onChange(term)}
+                                  className={cn(
+                                    "h-14 rounded-xl border-2 font-bold transition-all",
+                                    field.value === term 
+                                      ? "border-primary bg-primary/5 text-primary" 
+                                      : "border-[#E2E8F0] text-muted-foreground hover:border-primary/30"
+                                  )}
+                                >
+                                  {term} mo
+                                </button>
+                              ))}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {currentStep === 3 && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                       <div className="bg-[#FAFAFA] border rounded-2xl p-8 space-y-6">
                           <div className="flex justify-between items-center">
-                            <span className="text-base font-bold text-amber-700">Net Proceeds:</span>
-                            <span className="text-xl font-black text-amber-600">
-                              ₱{(Math.round((loanAmount - selectedOldLoan.unpaidPrincipal) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
+                             <span className="text-muted-foreground">Applicant</span>
+                             <span className="font-bold text-lg">{applicantName}</span>
                           </div>
-                          <p className="text-[10px] text-amber-700/70 italic text-center">
-                             Borrower will receive this amount after settling the old balance.
-                          </p>
-                        </div>
-                      )}
+                          <div className="flex justify-between items-center">
+                             <span className="text-muted-foreground">Amount</span>
+                             <span className="font-black text-2xl text-primary">₱{Number(loanAmount).toLocaleString()}</span>
+                          </div>
+                          <Separator />
+                          <div className="grid grid-cols-2 gap-4">
+                             <div className="bg-white p-4 rounded-xl border">
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold">Term</p>
+                                <p className="text-lg font-bold">{form.getValues("paymentTerm")} Months</p>
+                             </div>
+                             <div className="bg-white p-4 rounded-xl border">
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold">Type</p>
+                                <p className="text-lg font-bold truncate">{form.getValues("loanType")}</p>
+                             </div>
+                          </div>
+                       </div>
+
+                       <FormField
+                        control={form.control}
+                        name="remarks"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Official Remarks</FormLabel>
+                            <FormControl>
+                              <Textarea placeholder="Add context for the credit committee..." className="min-h-32 border-[#E2E8F0] shadow-none bg-[#FAFAFA]/50" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   )}
                 </div>
+              </ScrollArea>
 
-                {/* Two Column Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Loan Type */}
-                  <FormField
-                    control={form.control}
-                    name="loanType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-semibold">Type of Loan</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-11 text-base">
-                              <SelectValue placeholder="Select a loan type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {loanTypes.map((type) => (
-                              <SelectItem key={type.id} value={type.name} className="text-base">
-                                {type.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <div className="p-12 pt-6 border-t bg-white flex justify-between items-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => currentStep > 1 ? setCurrentStep(currentStep - 1) : onOpenChange(false)}
+                  className="h-14 px-8 text-base font-bold"
+                >
+                  {currentStep === 1 ? "Cancel" : "Back"}
+                </Button>
 
-                  {/* Payment Term */}
-                  <FormField
-                    control={form.control}
-                    name="paymentTerm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-semibold">Payment Term (Months)</FormLabel>
-                        <Select
-                          onValueChange={(val) => field.onChange(Number(val))}
-                          defaultValue={String(field.value)}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-11 text-base">
-                              <SelectValue placeholder="Select a payment term" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {paymentTermOptions.map((term) => (
-                              <SelectItem key={term} value={String(term)} className="text-base">
-                                {term} month{term > 1 ? "s" : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="flex gap-4">
+                  {currentStep < 3 ? (
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        // Validate current step before proceeding
+                        let fieldsToValidate: any = [];
+                        if (currentStep === 1) fieldsToValidate = ['applicantName', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
+                        if (currentStep === 2) fieldsToValidate = ['amount', 'paymentTerm'];
+                        
+                        const isValid = await form.trigger(fieldsToValidate);
+                        if (isValid) setCurrentStep(currentStep + 1);
+                      }}
+                      className="h-14 px-12 text-base font-bold"
+                      disabled={currentStep === 1 && !applicantName}
+                    >
+                      Continue
+                    </Button>
+                  ) : (
+                    <Button type="submit" disabled={form.formState.isSubmitting} className="h-14 px-12 text-base font-bold shadow-xl shadow-primary/20">
+                      {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Submit Application
+                    </Button>
+                  )}
                 </div>
-
-                {/* Purpose */}
-                <FormField
-                  control={form.control}
-                  name="purpose"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">Purpose</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-11 text-base">
-                            <SelectValue placeholder="Select a purpose" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {loanPurposes.map((purpose) => (
-                            <SelectItem key={purpose.id} value={purpose.name} className="text-base">
-                              {purpose.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Remarks */}
-                <FormField
-                  control={form.control}
-                  name="remarks"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">Remarks (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter any relevant remarks"
-                          className="resize-none min-h-24 text-base"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
-            </ScrollArea>
-
-            {/* Footer */}
-            <SheetFooter className="pt-6 border-t mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="h-11 px-6 text-base"
-              >
-                Cancel
-              </Button>
-
-              <Button 
-                type="submit" 
-                disabled={form.formState.isSubmitting}
-                className="h-11 px-8 text-base"
-              >
-                {form.formState.isSubmitting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                <span>{isEditMode ? "Save Changes" : "Create Loan"}</span>
-              </Button>
-            </SheetFooter>
-          </form>
-        </Form>
+            </form>
+          </Form>
+        </div>
       </SheetContent>
     </Sheet>
   );

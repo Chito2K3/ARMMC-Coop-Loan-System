@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { AuthGuard } from '@/components/auth-guard';
+
 import { DashboardLayout } from '@/components/dashboard-layout';
 
 const inter = Inter({
@@ -28,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
-      <body suppressHydrationWarning className="font-body antialiased min-h-screen bg-background bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/15 via-background to-background">
+      <body suppressHydrationWarning className="font-body antialiased min-h-screen bg-background text-foreground">
         <FirebaseClientProvider>
           <AuthGuard>
             <DashboardLayout>

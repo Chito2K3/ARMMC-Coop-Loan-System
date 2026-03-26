@@ -16,14 +16,15 @@ import { differenceInDays } from 'date-fns';
 import { getPenaltySettings } from '@/firebase/penalty-service';
 import type { Loan } from '@/lib/types';
 
-export function Header() {
-  const auth = useAuth();
+interface HeaderProps {
+  isSidebarExpanded: boolean;
+  onToggleSidebar: () => void;
+}
+
+export function Header({ isSidebarExpanded, onToggleSidebar }: HeaderProps) {
   const firestore = useFirestore();
   const { user } = useUser();
-  const { toast } = useToast();
-  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowReleasePanel } = useApprovalPanel();
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,137 +56,44 @@ export function Header() {
     fetchUserRole();
   }, [user, firestore]);
 
-  const loansQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'loans'), orderBy('createdAt', 'desc'));
-  }, [firestore]);
-
-  const { data: allLoans } = useCollection<Loan>(loansQuery);
-
-  const approvalCount = useMemo(() => {
-    if (!allLoans) return 0;
-    return allLoans.filter(loan => loan.status === 'pending').length;
-  }, [allLoans]);
-
-  const salaryCount = useMemo(() => {
-    if (!allLoans) return 0;
-    return allLoans.filter(loan => loan.status === 'pending' && (!loan.salary || loan.salary === 0)).length;
-  }, [allLoans]);
-
-  const releaseCount = useMemo(() => {
-    if (!allLoans) return 0;
-    return allLoans.filter(loan => loan.status === 'approved').length;
-  }, [allLoans]);
-
-
-
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full">
-      <div className="p-6 flex items-center justify-center border-b border-border">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground">{userName || 'User'}</h2>
-          <p className="text-base text-muted-foreground capitalize mt-1">{userRole || 'Loading...'}</p>
-        </div>
-      </div>
-
-      <div className="flex-1 px-4 py-6 space-y-2">
-        <Link href="/" onClick={() => setIsOpen(false)} className="w-full">
-          <Button variant="ghost" className="w-full justify-start">
-            <Home className="h-4 w-4 mr-2" />
-            Dashboard
-          </Button>
-        </Link>
-        <Link href="/reports" onClick={() => setIsOpen(false)} className="w-full">
-          <Button variant="ghost" className="w-full justify-start">
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Reports
-          </Button>
-        </Link>
-        {userRole === 'admin' && (
-          <>
-            <Link href="/admin" onClick={() => setIsOpen(false)} className="w-full">
-              <Button variant="ghost" className="w-full justify-start">
-                <Settings className="h-4 w-4 mr-2" />
-                Admin
-              </Button>
-            </Link>
-            <Link href="/admin/settings" onClick={() => setIsOpen(false)} className="w-full">
-              <Button variant="ghost" className="w-full justify-start">
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-            </Link>
-          </>
-        )}
-        {(userRole === 'creditCommitteeMember' || userRole === 'creditCommitteeOfficer' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowApprovalPanel(true); }}>
-            For Approval {approvalCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
-          </Button>
-        )}
-        {(userRole === 'payrollChecker' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowSalaryInputPanel(true); }}>
-            Input Salary {salaryCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{salaryCount}</span>}
-          </Button>
-        )}
-        {(userRole === 'bookkeeper' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => { setIsOpen(false); setShowReleasePanel(true); }}>
-            For Releasing {releaseCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{releaseCount}</span>}
-          </Button>
-        )}
-
-      </div>
-
-      <div className="p-6 border-t border-border">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={async () => {
-            try {
-              await auth.signOut();
-            } catch (err) {
-              console.error('Logout failed:', err);
-            }
-          }}
-          className="w-full"
-        >
-          Logout
-        </Button>
-      </div>
-    </div>
-  );
-
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 max-w-full items-center px-4 md:px-6 gap-4">
-        <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger asChild className="lg:hidden">
-            <Button variant="ghost" size="icon">
-              <Menu className="h-6 w-6" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0">
-            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-            <SidebarContent />
-          </SheetContent>
-        </Sheet>
-
-        <div className="flex flex-1 items-center">
-          <Link href="/" className="flex items-center space-x-2">
-            <Image src="/logo.png" alt="ARMMC Logo" width={40} height={40} className="rounded-full" />
-            <span className="hidden sm:inline-block text-lg md:text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
-              ARMMC Loan Manager
-            </span>
+    <header className="sticky top-0 z-30 w-full border-b border-[#E2E8F0] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <div className="flex h-16 items-center px-4 md:px-6 gap-4">
+        <div className="flex items-center gap-4 flex-1">
+          <Link href="/" className="flex items-center space-x-2 mr-2">
+            <Image src="/logo.png" alt="ARMMC Logo" width={32} height={32} className="rounded-full" />
           </Link>
+          
+          <div className="h-4 w-[1px] bg-[#E2E8F0] mx-1" />
+          
+          <nav className="flex items-center text-sm font-medium">
+            <Link 
+              href="/" 
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Dashboard
+            </Link>
+            <span className="mx-2 text-muted-foreground/50">/</span>
+            <span className="text-foreground">Loans</span>
+          </nav>
         </div>
-        <div className="flex items-center justify-end space-x-4">
+
+        <div className="flex items-center justify-end gap-2">
           {userRole === 'admin' && (
             <Link href="/admin">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="h-9">
                 <Settings className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">Admin</span>
               </Button>
             </Link>
           )}
+          <div className="h-8 w-[1px] bg-[#E2E8F0] mx-2" />
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end hidden sm:flex">
+              <span className="text-sm font-medium">{userName || 'User'}</span>
+              <span className="text-[10px] text-muted-foreground capitalize">{userRole?.replace(/([A-Z])/g, ' $1').trim()}</span>
+            </div>
+          </div>
         </div>
       </div>
     </header>

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCollection, useMemoFirebase, useFirestore } from '@/firebase';
-import { collection, query, orderBy, where } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { format } from 'date-fns';
 import type { Loan } from '@/lib/types';
 
@@ -19,12 +19,16 @@ export function ReleasePanel({ onSelectLoan, selectedLoanId }: ReleasePanelProps
     if (!firestore) return null;
     return query(
       collection(firestore, 'loans'),
-      where('status', '==', 'approved'),
       orderBy('createdAt', 'desc')
     );
   }, [firestore]);
 
-  const { data: loansForRelease } = useCollection<Loan>(loansQuery);
+  const { data: allLoans } = useCollection<Loan>(loansQuery);
+
+  const loansForRelease = useMemo(() => {
+    if (!allLoans) return [];
+    return allLoans.filter(loan => loan.status === 'approved');
+  }, [allLoans]);
 
   const safeLoansForRelease = loansForRelease ?? [];
 

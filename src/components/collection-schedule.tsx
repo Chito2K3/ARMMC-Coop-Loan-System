@@ -57,6 +57,7 @@ import { Label } from '@/components/ui/label';
 
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { getPenaltySettings } from '@/firebase/penalty-service';
 import type { Loan, Payment } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 
@@ -73,22 +74,26 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const ensureDate = (dateVal: any): Date | undefined => {
-  if (!dateVal) return undefined;
-  if (dateVal instanceof Date) return dateVal;
-  if (typeof dateVal === 'string') return new Date(dateVal);
-  if (dateVal.toDate && typeof dateVal.toDate === 'function') return dateVal.toDate();
-  if (dateVal.seconds) return new Timestamp(dateVal.seconds, dateVal.nanoseconds || 0).toDate();
-  return undefined;
-};
-
 export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) {
   const firestore = useFirestore();
+  const [penaltyAmount, setPenaltyAmount] = React.useState(500);
+  const [gracePeriodDays, setGracePeriodDays] = React.useState(3);
   const [editingPaymentId, setEditingPaymentId] = React.useState<string | null>(null);
-  const [editAmount, setEditAmount] = React.useState<number | string>(0);
-  
-  const [isEditingSurcharge, setIsEditingSurcharge] = React.useState(false);
-  const [surchargePaidInput, setSurchargePaidInput] = React.useState<number | string>(loan.final_surcharge_paid || 0);
+  const [editAmount, setEditAmount] = React.useState<number | ''>('');
+
+  React.useEffect(() => {
+    const loadSettings = async () => {
+      if (!firestore) return;
+      try {
+        const settings = await getPenaltySettings(firestore);
+        setPenaltyAmount(settings.penaltyAmount);
+        setGracePeriodDays(settings.gracePeriodDays);
+      } catch (error) {
+        console.error('Error loading penalty settings:', error);
+      }
+    };
+    loadSettings();
+  }, [firestore]);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -109,77 +114,60 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     }));
   }, [rawPayments]);
 
-  // Surcharge payment tracking
-  const localShortfall = React.useMemo(() => payments.reduce((acc, p) => {
-    if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
-      return acc + Math.max(0, p.amount - p.actualAmountPaid);
-    }
-    return acc;
-  }, 0), [payments]);
+  const { totalShortfall, surchargeAmount, isSurchargePending } = React.useMemo(() => {
+    let shortfall = 0;
+    payments.forEach(p => {
+      if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
+        shortfall += (p.amount - p.actualAmountPaid);
+      }
+    });
+    
+    // Total shortfall including historical bucket
+    const effectiveShortfall = Math.max(loan.historical_shortfall_bucket || 0, shortfall);
+    // Double 2% penalty -> 4%
+    const surcharge = effectiveShortfall * 0.04;
+    
+    // Check if surcharge is paid
+    const isPending = effectiveShortfall > 0 && (loan.final_surcharge_paid || 0) < surcharge;
+    
+    return { totalShortfall: effectiveShortfall, surchargeAmount: surcharge, isSurchargePending: isPending };
+  }, [payments, loan.historical_shortfall_bucket, loan.final_surcharge_paid]);
 
-  const effectiveShortfallBucket = Math.max(loan.historical_shortfall_bucket || 0, localShortfall);
-  // Full Settlement Logic: Total Principal Shortfalls + 2% Monthly Penalty + 2% Maturity Surchage (Total 104%)
-  const finalSurchargeTotal = (effectiveShortfallBucket * 1.04) || 0;
-  const isSurchargeRequired = effectiveShortfallBucket > 0.01; 
-  const isSurchargePaid = (loan.final_surcharge_paid || 0) >= finalSurchargeTotal - 0.01;
-
-  const completedPayments = payments.filter(p => p.status === 'paid').length;
-  const currentMonth = completedPayments + 1;
-  const allPaymentsDone = completedPayments === loan.paymentTerm;
-  const showShadowRow = (currentMonth >= loan.paymentTerm - 1 || allPaymentsDone) && isSurchargeRequired;
-
-  const handleSurchargeDateChange = async (date: Date | undefined) => {
-    if (!firestore || !date) return;
-
+  const handleSettleSurcharge = async () => {
+    if (!firestore) return;
     try {
       const loanRef = doc(firestore, 'loans', loan.id);
+      
       await updateDocumentNonBlocking(loanRef, {
-        final_surcharge_date: Timestamp.fromDate(date),
+        final_surcharge_paid: surchargeAmount,
+        final_surcharge_date: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-
+      
       toast({
-        title: 'Surcharge Payment Date Updated',
-        description: 'Please record the actual amount paid to complete the audit.',
+        title: 'Surcharge Settled',
+        description: 'The historical shortfall surcharge has been paid.',
       });
-    } catch (error) {
-      console.error('Error updating surcharge date:', error);
-      toast({
-        title: 'Update Failed',
-        description: 'Failed to update surcharge payment date.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const checkAndCloseLoan = async (updatedPayments: Payment[], newSurchargePaid: number) => {
-    const allPaid = updatedPayments.every(p => p.status === 'paid');
-    
-    // Recalculate local shortfall from updatedPayments for immediate feedback
-    const updatedLocalShortfall = updatedPayments.reduce((acc, p) => {
-      if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
-        return acc + Math.max(0, p.amount - p.actualAmountPaid);
+      
+      // Check if all payments are paid
+      const allPaid = payments.every(p => p.status === 'paid');
+      if (allPaid) {
+        await updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
+        toast({
+          title: 'Loan Fully Paid!',
+          description: 'Congratulations! This loan has been fully paid.',
+          className: 'bg-green-100 text-green-800 border-green-200'
+        });
       }
-      return acc;
-    }, 0);
-    
-    const updatedEffectiveBucket = Math.max(loan.historical_shortfall_bucket || 0, updatedLocalShortfall);
-    // Full Settlement Logic: Total Principal Shortfalls + 4% Total Surcharge
-    const updatedSurchargeTotal = (updatedEffectiveBucket * 1.04) || 0;
-    const updatedSurchargeRequired = updatedEffectiveBucket > 0.01;
-    const hasUnpaidSurcharge = updatedSurchargeRequired && newSurchargePaid < updatedSurchargeTotal - 0.01;
-    
-    if (allPaid && !hasUnpaidSurcharge) {
-      const loanRef = doc(firestore!, 'loans', loan.id);
-      await updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
+    } catch (error) {
+      console.error('Error settling surcharge:', error);
       toast({
-        title: 'Loan Fully Paid!',
-        description: 'Congratulations! This loan has been fully paid.',
-        className: 'bg-green-100 text-green-800 border-green-200'
+         title: 'Update Failed',
+         description: 'Failed to settle surcharge.',
+         variant: 'destructive',
       });
     }
   };
-
 
   const handleDateChange = async (paymentId: string, date: Date | undefined) => {
     if (!firestore || !date) return;
@@ -212,39 +200,65 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       const payment = payments.find(p => p.id === paymentId);
       if (!payment) return;
 
-      // If we have an actual amount, we can mark as paid. 
-      // Status will be 'paid', and if paymentDate is missing, we'll set it later in the update.
-      if (actualAmount <= 0) {
+      // Only mark as paid if we have an actual amount and a payment date
+      if (actualAmount <= 0 || !payment.paymentDate) {
         toast({
           title: 'Invalid Entry',
-          description: 'Please enter a payment amount.',
+          description: 'Please enter a payment amount and select a payment date.',
           variant: 'destructive',
         });
         return;
       }
 
       const paymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
-      const updates: any = {
+      await updateDocumentNonBlocking(paymentRef, {
         actualAmountPaid: actualAmount,
         status: 'paid',
         updatedAt: serverTimestamp(),
-      };
-
-      if (!payment.paymentDate) {
-        updates.paymentDate = serverTimestamp();
-      }
-
-      await updateDocumentNonBlocking(paymentRef, updates);
+      });
 
       toast({
         title: 'Actual Amount Recorded',
         description: 'Payment has been marked as complete.',
       });
 
-      const updatedPayments = payments.map(p => 
-        p.id === paymentId ? { ...p, status: 'paid' as const, actualAmountPaid: actualAmount } : p
-      );
-      await checkAndCloseLoan(updatedPayments, loan.final_surcharge_paid || 0);
+      // Calculate shortfall to prevent marking as fully-paid prematurely
+      let currentShortfall = 0;
+      payments.forEach(p => {
+        if (p.id === paymentId) {
+          if (typeof actualAmount === 'number') {
+            currentShortfall += (p.amount - actualAmount);
+          }
+        } else if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
+          currentShortfall += (p.amount - p.actualAmountPaid);
+        }
+      });
+      
+      const effectiveShortfall = Math.max(loan.historical_shortfall_bucket || 0, currentShortfall);
+      const surcharge = effectiveShortfall * 0.04;
+      const isPending = effectiveShortfall > 0 && (loan.final_surcharge_paid || 0) < surcharge;
+
+      // Check if all payments are now marked as paid
+      const allPaid = payments.every(p => {
+        if (p.id === paymentId) return true; // Current payment is now paid
+        return p.status === 'paid';
+      });
+
+      if (allPaid && !isPending && effectiveShortfall <= 0) {
+        const loanRef = doc(firestore, 'loans', loan.id);
+        await updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
+        toast({
+          title: 'Loan Fully Paid!',
+          description: 'Congratulations! This loan has been fully paid.',
+          className: 'bg-green-100 text-green-800 border-green-200'
+        });
+      } else if (allPaid && (isPending || effectiveShortfall > 0)) {
+        toast({
+          title: 'Payments Complete, Audit Pending',
+          description: 'All monthly schedules are paid, but a shortfall/surcharge must be settled.',
+          className: 'bg-orange-100 text-orange-800 border-orange-200'
+        });
+      }
     } catch (error) {
       console.error('Error recording actual amount:', error);
       toast({
@@ -256,7 +270,8 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   };
 
   const handleEditAmountSave = async () => {
-    if (!editingPaymentId || Number(editAmount) <= 0) {
+    const amount = Number(editAmount);
+    if (!editingPaymentId || amount <= 0) {
       toast({
         title: 'Invalid Amount',
         description: 'Please enter a valid amount.',
@@ -266,24 +281,22 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     }
 
     const payment = payments.find(p => p.id === editingPaymentId);
-    if (!payment) {
-      setEditingPaymentId(null);
+    if (!payment || !payment.paymentDate) {
+      toast({
+        title: 'Invalid Entry',
+        description: 'Please select a payment date first.',
+        variant: 'destructive',
+      });
       return;
     }
 
     try {
       const paymentRef = doc(firestore, 'loans', loan.id, 'payments', editingPaymentId);
-      const updates: any = {
-        actualAmountPaid: Number(editAmount),
+      await updateDocumentNonBlocking(paymentRef, {
+        actualAmountPaid: amount,
         status: 'paid',
         updatedAt: serverTimestamp(),
-      };
-
-      if (!payment.paymentDate) {
-        updates.paymentDate = serverTimestamp();
-      }
-
-      await updateDocumentNonBlocking(paymentRef, updates);
+      });
 
       toast({
         title: 'Amount Updated',
@@ -291,12 +304,45 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       });
 
       setEditingPaymentId(null);
-      setEditAmount(0);
+      setEditAmount('');
 
-      const updatedPayments = payments.map(p => 
-        p.id === editingPaymentId ? { ...p, status: 'paid' as const, actualAmountPaid: Number(editAmount) } : p
-      );
-      await checkAndCloseLoan(updatedPayments, loan.final_surcharge_paid || 0);
+      // Calculate shortfall to prevent marking as fully-paid prematurely
+      let currentShortfall = 0;
+      payments.forEach(p => {
+        if (p.id === editingPaymentId) {
+          if (typeof amount === 'number') {
+            currentShortfall += (p.amount - amount);
+          }
+        } else if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
+          currentShortfall += (p.amount - p.actualAmountPaid);
+        }
+      });
+      
+      const effectiveShortfall = Math.max(loan.historical_shortfall_bucket || 0, currentShortfall);
+      const surcharge = effectiveShortfall * 0.04;
+      const isPending = effectiveShortfall > 0 && (loan.final_surcharge_paid || 0) < surcharge;
+
+      // Check if all payments are now marked as paid
+      const allPaid = payments.every(p => {
+        if (p.id === editingPaymentId) return true;
+        return p.status === 'paid';
+      });
+
+      if (allPaid && !isPending && effectiveShortfall <= 0) {
+        const loanRef = doc(firestore, 'loans', loan.id);
+        await updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
+        toast({
+          title: 'Loan Fully Paid!',
+          description: 'Congratulations! This loan has been fully paid.',
+          className: 'bg-green-100 text-green-800 border-green-200'
+        });
+      } else if (allPaid && (isPending || effectiveShortfall > 0)) {
+        toast({
+          title: 'Payments Complete, Audit Pending',
+          description: 'All monthly schedules are paid, but a shortfall/surcharge must be settled.',
+          className: 'bg-orange-100 text-orange-800 border-orange-200'
+        });
+      }
     } catch (error) {
       console.error('Error updating amount:', error);
       toast({
@@ -307,42 +353,99 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     }
   };
 
-  const handleSurchargePaidSave = async () => {
-    if (!firestore || Number(surchargePaidInput) < 0) return;
-    
+  const handleWaivePenalty = async (paymentId: string) => {
+    if (!firestore) return;
     try {
-      const loanRef = doc(firestore, 'loans', loan.id);
-      await updateDocumentNonBlocking(loanRef, {
-        final_surcharge_paid: Number(surchargePaidInput),
-        final_surcharge_total: finalSurchargeTotal,
+      const paymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
+      await updateDocumentNonBlocking(paymentRef, {
+        penaltyWaived: true,
         updatedAt: serverTimestamp(),
       });
-      
+
+      // Touch loan to trigger sidebar refresh
+      const loanRef = doc(firestore, 'loans', loan.id);
+      await updateDocumentNonBlocking(loanRef, { updatedAt: serverTimestamp() });
+
       toast({
-        title: 'Surcharge Payment Updated',
-        description: 'The audit surcharge payment has been recorded.',
+        title: 'Penalty Waived',
+        description: 'The penalty for this payment has been waived.',
       });
-      
-      setIsEditingSurcharge(false);
-      await checkAndCloseLoan(payments, Number(surchargePaidInput));
     } catch (error) {
-      console.error('Error updating surcharge:', error);
+      console.error('Error waiving penalty:', error);
       toast({
         title: 'Update Failed',
-        description: 'Failed to update surcharge amount.',
+        description: 'Failed to waive penalty. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDenyPenalty = async (paymentId: string, paymentNumber: number) => {
+    if (!firestore) return;
+    const currentPayment = payments.find(p => p.id === paymentId);
+    if (!currentPayment) return;
+
+    try {
+      const penalty = calculatePenalty(currentPayment);
+
+      const currentPaymentRef = doc(firestore, 'loans', loan.id, 'payments', paymentId);
+      await updateDocumentNonBlocking(currentPaymentRef, {
+        penaltyDenied: true,
+        updatedAt: serverTimestamp(),
+      });
+
+      const nextPayment = payments.find(p => p.paymentNumber === paymentNumber + 1);
+      if (nextPayment) {
+        const nextPaymentRef = doc(firestore, 'loans', loan.id, 'payments', nextPayment.id);
+        await updateDocumentNonBlocking(nextPaymentRef, {
+          amount: nextPayment.amount + penalty,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      toast({
+        title: 'Penalty Deferred',
+        description: 'The penalty has been carried over to the next payment.',
+      });
+
+      // Touch loan to trigger sidebar refresh
+      const loanRef = doc(firestore, 'loans', loan.id);
+      await updateDocumentNonBlocking(loanRef, { updatedAt: serverTimestamp() });
+    } catch (error) {
+      console.error('Error deferring penalty:', error);
+      toast({
+        title: 'Update Failed',
+        description: 'Failed to defer penalty. Please try again.',
         variant: 'destructive',
       });
     }
   };
 
   const getPaymentStatus = (payment: (typeof payments)[0]) => {
-    if (payment.remarks === 'Deducted from proceeds') {
-      return <Badge className="bg-blue-600 hover:bg-blue-700">Deducted</Badge>;
+    const dueDate = payment.dueDate;
+    const paymentDate = payment.paymentDate;
+
+    if (paymentDate) {
+      const isLate = differenceInDays(paymentDate, dueDate) > gracePeriodDays;
+      return isLate ? (
+        <Badge variant="destructive">Paid (Late)</Badge>
+      ) : (
+        <Badge className="bg-green-600 hover:bg-green-700">Paid</Badge>
+      );
     }
-    if (payment.paymentDate) {
-      return <Badge className="bg-green-600 hover:bg-green-700">Paid</Badge>;
-    }
+
     return <Badge variant="outline">Pending</Badge>;
+  };
+
+  const calculatePenalty = (payment: (typeof payments)[0]) => {
+    if (payment.penaltyWaived) return 0;
+
+    if (payment.status === 'paid' && payment.actualAmountPaid !== undefined && payment.actualAmountPaid < payment.amount) {
+      const shortfall = payment.amount - payment.actualAmountPaid;
+      return shortfall * 0.02; // 2% per month equivalent
+    }
+
+    return 0;
   };
 
   const getPaymentComparison = (payment: (typeof payments)[0]) => {
@@ -351,42 +454,34 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     const difference = Math.round((payment.actualAmountPaid - payment.amount) * 100) / 100;
 
     if (Math.abs(difference) < 0.01) {
-      return { label: '✓ Full', color: 'text-green-400' };
+      return { label: '✓ Full', color: 'text-green-600' };
     } else if (difference < 0) {
-      return { label: `⚠️ Short ₱${Math.abs(difference).toLocaleString()}`, color: 'text-amber-400' };
+      return { label: `⚠️ Short ₱${Math.abs(difference).toLocaleString()}`, color: 'text-orange-600' };
     } else {
-      return { label: `ℹ️ Change ₱${difference.toLocaleString()}`, color: 'text-blue-400' };
+      return { label: `ℹ️ Change ₱${difference.toLocaleString()}`, color: 'text-blue-600' };
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Collection Schedule</CardTitle>
-        <CardDescription>
-          Manage monthly payments and actual amounts paid.
+    <Card className="border-2 shadow-md border-primary/20">
+      <CardHeader className="pb-6">
+        <CardTitle className="text-2xl text-primary font-bold">Collection Schedule</CardTitle>
+        <CardDescription className="text-base">
+          Manage monthly payments, penalties, and payment dates.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {currentMonth === loan.paymentTerm - 1 && isSurchargeRequired && (
-          <div className="mb-4 p-4 bg-orange-50 border border-orange-200 text-orange-800 rounded-lg text-sm font-medium flex items-center gap-2">
-            ⚠️ System Audit: A "Double 2%" penalty (₱{formatCurrency(finalSurchargeTotal)}) will be added to your final settlement due to previous shortfalls (2% Monthly + 2% Maturity).
-          </div>
-        )}
-        
-        <ScrollArea className="h-96 w-full rounded-md border">
-          <Table>
+        <ScrollArea className="h-[600px] w-full rounded-md border">
+          <Table className="text-base">
             <TableHeader className="sticky top-0 bg-muted">
-              <TableRow>
-                <TableHead className="w-[50px]">#</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Payment Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Actual Paid</TableHead>
-                <TableHead className="text-right">Shortfall</TableHead>
-                <TableHead className="text-right">Penalty(2%)</TableHead>
-                <TableHead className="text-right">Total Debt</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
+              <TableRow className="text-base">
+                <TableHead className="w-[50px] font-semibold">#</TableHead>
+                <TableHead className="font-semibold">Due Date</TableHead>
+                <TableHead className="font-semibold">Payment Date</TableHead>
+                <TableHead className="text-right font-semibold">Amount</TableHead>
+                <TableHead className="text-right font-semibold">Actual Paid</TableHead>
+                <TableHead className="text-right font-semibold">Penalty</TableHead>
+                <TableHead className="text-center font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -409,14 +504,13 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
               )}
               {!isLoading && payments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     No payment schedule found.
                   </TableCell>
                 </TableRow>
               )}
               {payments.map((payment) => {
-                const shortfall = payment.status === 'paid' ? Math.max(0, payment.amount - (payment.actualAmountPaid || 0)) : 0;
-                const monthlyPenalty = shortfall * 0.02;
+                const penalty = calculatePenalty(payment);
                 const comparison = getPaymentComparison(payment);
                 return (
                   <TableRow key={payment.id}>
@@ -427,40 +521,34 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                       {payment.dueDate ? format(payment.dueDate, 'MMM d, yyyy') : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      {payment.remarks === 'Deducted from proceeds' ? (
-                        <div className="flex items-center gap-2 text-sm text-blue-400 font-medium italic px-2">
-                          <span>Deducted at Release</span>
-                        </div>
-                      ) : (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={'outline'}
-                              className={cn(
-                                'w-[200px] justify-start text-left font-normal',
-                                !payment.paymentDate && 'text-muted-foreground',
-                                userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
-                              )}
-                              disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {payment.paymentDate ? (
-                                format(payment.paymentDate, 'MMM d, yyyy')
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={payment.paymentDate}
-                              onSelect={(date) => handleDateChange(payment.id, date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      )}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={'outline'}
+                            className={cn(
+                              'w-[200px] justify-start text-left font-normal',
+                              !payment.paymentDate && 'text-muted-foreground',
+                              userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
+                            )}
+                            disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {payment.paymentDate ? (
+                              format(payment.paymentDate, 'MMM d, yyyy')
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={payment.paymentDate}
+                            onSelect={(date) => handleDateChange(payment.id, date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(payment.amount)}
@@ -470,13 +558,13 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                         <span className="font-medium">
                           {payment.actualAmountPaid ? formatCurrency(payment.actualAmountPaid) : '—'}
                         </span>
-                        {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && payment.remarks !== 'Deducted from proceeds' && (
+                        {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && (
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => {
                               setEditingPaymentId(payment.id);
-                              setEditAmount(payment.actualAmountPaid || 0);
+                              setEditAmount(payment.actualAmountPaid || '');
                             }}
                             className="h-6 w-6 p-0"
                           >
@@ -490,108 +578,71 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right text-amber-500 font-medium">
-                      {shortfall > 0 ? formatCurrency(shortfall) : '—'}
-                    </TableCell>
                     <TableCell
-                      className={cn('text-right font-medium', monthlyPenalty > 0 && 'text-red-400')}
+                      className={cn('text-right font-medium', penalty > 0 && 'text-destructive')}
                     >
-                      {monthlyPenalty > 0 ? formatCurrency(monthlyPenalty) : '—'}
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-amber-400">
-                      {shortfall > 0 ? formatCurrency(shortfall + monthlyPenalty) : '—'}
+                      {formatCurrency(penalty)}
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className="text-xs text-muted-foreground">
-                        {monthlyPenalty > 0 ? 'Recorded' : 'None'}
-                      </span>
+                      {penalty > 0 && !payment.penaltyWaived && !payment.penaltyDenied && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={loan.status === 'fully-paid' || userRole !== 'approver'}
+                              className={userRole !== 'approver' ? 'opacity-50 cursor-not-allowed' : ''}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleWaivePenalty(payment.id)}>
+                              Waive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDenyPenalty(payment.id, payment.paymentNumber)}>
+                              Deny
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      {(payment.penaltyWaived || payment.penaltyDenied) && (
+                        <span className="text-xs text-muted-foreground">
+                          {payment.penaltyWaived ? 'Waived' : 'Deferred'}
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
               })}
               
-              {/* Shadow Row: Audit Maturity Surcharge */}
-              {showShadowRow && (
-                <TableRow key="shadow-row-surcharge" className="bg-amber-950/20 border-t-2 border-amber-500/50">
-                  <TableCell>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={'outline'}
-                          className={cn(
-                            'w-[200px] justify-start text-left font-normal',
-                            !loan.final_surcharge_date && 'text-muted-foreground',
-                            !(userRole?.toLowerCase() === 'bookkeeper' || userRole?.toLowerCase() === 'admin') && 'opacity-50 cursor-not-allowed'
-                          )}
-                          disabled={userRole?.toLowerCase() !== 'bookkeeper' && userRole?.toLowerCase() !== 'admin'}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {loan.final_surcharge_date ? (
-                            format(ensureDate(loan.final_surcharge_date) || new Date(), 'MMM d, yyyy')
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={ensureDate(loan.final_surcharge_date)}
-                          onSelect={(date) => handleSurchargeDateChange(date)}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+              {/* SHADOW ROW FOR SHORTFALL */}
+              {totalShortfall > 0 && (
+                <TableRow className="bg-orange-50/50 hover:bg-orange-50/80">
+                  <TableCell className="font-bold text-orange-800">Audit</TableCell>
+                  <TableCell colSpan={2} className="text-orange-800 italic font-medium">
+                    Historical Shortfall & Double 2% (4%) Surcharge
                   </TableCell>
-                  <TableCell colSpan={2} className="font-bold text-amber-500">
-                    Final Settlement Audit (2% Monthly + 2% Maturity) <br/>
-                    <span className="text-xs text-amber-200/70 font-normal">
-                      Full Principal Shortfalls + Accumulated 4% Total Surcharge <br/>
-                      Based on ₱{(effectiveShortfallBucket).toLocaleString()} total shortfall
-                    </span>
+                  <TableCell className="text-right text-muted-foreground">
+                    {/* Final surcharge paid */}
+                    {loan.final_surcharge_paid ? (
+                      <Badge className="bg-green-600">Settled</Badge>
+                    ) : '—'}
                   </TableCell>
-                  <TableCell className="text-right font-bold text-amber-500" colSpan={3}>
-                    {formatCurrency(finalSurchargeTotal)}
+                  <TableCell className="text-right text-orange-800 font-bold text-xl">
+                    {formatCurrency(totalShortfall)}
                   </TableCell>
-                  <TableCell className="text-right font-medium">
-                    <div className="flex items-center justify-end gap-2">
-                      {isEditingSurcharge ? (
-                        <div className="flex items-center gap-1">
-                          <Input 
-                            type="number" 
-                            className="h-7 w-20 text-right text-xs" 
-                            value={surchargePaidInput} 
-                            onChange={(e) => setSurchargePaidInput(e.target.value)}
-                            autoFocus
-                          />
-                          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={handleSurchargePaidSave}>Save</Button>
-                        </div>
-                      ) : (
-                        <>
-                          <span className={isSurchargePaid ? "text-green-400 font-bold" : "text-amber-500"}>
-                            {loan.final_surcharge_paid !== undefined ? formatCurrency(loan.final_surcharge_paid) : '—'}
-                           </span>
-                          {(userRole?.toLowerCase() === 'bookkeeper' || userRole?.toLowerCase() === 'admin') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSurchargePaidInput(loan.final_surcharge_paid || 0);
-                                setIsEditingSurcharge(true);
-                              }}
-                              className="h-6 w-6 p-0 text-amber-500 hover:text-amber-400 hover:bg-amber-950/40"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                  <TableCell className="text-right text-destructive font-bold">
+                    {formatCurrency(surchargeAmount)}
                   </TableCell>
-                  <TableCell colSpan={2}></TableCell>
+                  <TableCell className="text-center">
+                    {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && isSurchargePending && (
+                       <Button size="sm" variant="destructive" onClick={handleSettleSurcharge} className="w-full">Settle</Button>
+                    )}
+                    {!isSurchargePending && <span className="text-sm font-bold text-green-600">Paid</span>}
+                  </TableCell>
                 </TableRow>
               )}
-              
             </TableBody>
           </Table>
         </ScrollArea>
@@ -601,7 +652,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       <Dialog open={!!editingPaymentId} onOpenChange={(open) => {
         if (!open) {
           setEditingPaymentId(null);
-          setEditAmount(0);
+          setEditAmount('');
         }
       }}>
         <DialogContent>
@@ -621,7 +672,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                   type="number"
                   placeholder="0.00"
                   value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
+                  onChange={(e) => setEditAmount(e.target.value === '' ? '' : Number(e.target.value))}
                   className="pl-6"
                   autoFocus
                 />
@@ -631,7 +682,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setEditingPaymentId(null);
-              setEditAmount(0);
+              setEditAmount('');
             }}>
               Cancel
             </Button>

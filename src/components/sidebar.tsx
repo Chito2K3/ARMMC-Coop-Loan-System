@@ -3,7 +3,7 @@
 import { useUser } from '@/firebase/provider';
 import { useAuth } from '@/firebase/provider';
 import { Button } from '@/components/ui/button';
-import { LogOut, BarChart3, Home, Settings } from 'lucide-react';
+import { LogOut, BarChart3, Home, Settings, ChevronLeft, ChevronRight, User, Banknote, ClipboardCheck, DollarSign } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, orderBy, doc, getDoc, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase/provider';
@@ -11,12 +11,19 @@ import { useCollection, useMemoFirebase } from '@/firebase';
 import { useApprovalPanel } from './approval-context';
 import Link from 'next/link';
 import type { Loan } from '@/lib/types';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
-export function Sidebar() {
+interface SidebarProps {
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
   const { user } = useUser();
   const auth = useAuth();
   const firestore = useFirestore();
-  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowReleasePanel } = useApprovalPanel();
+  const { setShowApprovalPanel, setShowSalaryInputPanel, setShowReleasePanel, setSelectedLoanId } = useApprovalPanel();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
 
@@ -32,7 +39,6 @@ export function Sidebar() {
             setUserName(userData.name);
             setUserRole(userData.role);
           } else {
-            // Fallback to email search if UID doc doesn't exist
             const usersRef = collection(firestore, 'users');
             const q = query(usersRef, where('email', '==', user.email));
             const snapshot = await getDocs(q);
@@ -72,7 +78,6 @@ export function Sidebar() {
     return allLoans.filter(loan => loan.status === 'approved').length;
   }, [allLoans]);
 
-
   const handleLogout = async () => {
     try {
       await auth.signOut();
@@ -81,72 +86,141 @@ export function Sidebar() {
     }
   };
 
+  const NavItem = ({ href, icon: Icon, label, badge, onClick }: any) => {
+    const content = (
+      <Button 
+        variant="ghost" 
+        className={cn(
+          "w-full transition-all duration-200",
+          isExpanded ? "justify-start px-4" : "justify-center px-0 h-10 w-10 mx-auto"
+        )}
+        onClick={onClick}
+      >
+        <Icon className={cn("h-5 w-5", isExpanded ? "mr-3" : "mr-0")} />
+        {isExpanded && <span className="truncate">{label}</span>}
+        {isExpanded && badge > 0 && (
+          <span className="ml-auto bg-primary text-primary-foreground text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[1.2rem] text-center">
+            {badge}
+          </span>
+        )}
+      </Button>
+    );
+
+    if (onClick && !href) {
+      return isExpanded ? content : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>{content}</TooltipTrigger>
+            <TooltipContent side="right">
+              {label} {badge > 0 && `(${badge})`}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return (
+      <Link href={href || '#'} className="w-full block">
+        {isExpanded ? content : (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>{content}</TooltipTrigger>
+              <TooltipContent side="right">{label}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </Link>
+    );
+  };
+
   return (
-    <div className="hidden lg:flex w-64 bg-card border-r border-border h-screen flex-col fixed left-0 top-0 pt-14">
-      <div className="p-6 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground">{userName || 'User'}</h2>
-          <p className="text-base text-muted-foreground capitalize mt-1">{userRole || 'Loading...'}</p>
+    <div className={cn(
+      "hidden lg:flex flex-col bg-white border-r border-[#E2E8F0] h-screen fixed left-0 top-0 transition-all duration-300 ease-in-out z-40",
+      isExpanded ? "w-64" : "w-16"
+    )}>
+      {/* Sidebar Header / Logo area */}
+      <div className={cn(
+        "h-16 flex items-center border-b border-[#E2E8F0] px-4 overflow-hidden",
+        isExpanded ? "justify-between" : "justify-center"
+      )}>
+        {isExpanded && (
+          <span className="font-bold text-lg text-primary truncate">ARMMC</span>
+        )}
+        <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+          {isExpanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+        </Button>
+      </div>
+
+      {/* User Info */}
+      <div className={cn(
+        "py-6 px-4 flex flex-col items-center border-b border-[#E2E8F0]",
+        !isExpanded && "py-4 px-0"
+      )}>
+        <div className={cn(
+          "bg-muted rounded-full flex items-center justify-center text-muted-foreground",
+          isExpanded ? "h-12 w-12 mb-3" : "h-10 w-10"
+        )}>
+          {userName ? (
+            <span className="font-semibold text-sm">
+              {userName.split(' ').map(n => n[0]).join('').toUpperCase()}
+            </span>
+          ) : (
+            <User className="h-5 w-5" />
+          )}
+        </div>
+        {isExpanded && (
+          <div className="text-center w-full overflow-hidden">
+            <h2 className="text-sm font-semibold text-foreground truncate">{userName || 'User'}</h2>
+            <p className="text-xs text-muted-foreground capitalize truncate">{userRole?.replace(/([A-Z])/g, ' $1').trim() || 'Loading...'}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex-1 px-3 py-6 space-y-4 overflow-y-auto overflow-x-hidden">
+        <div className="space-y-1">
+          {userRole === 'admin' && (
+            <NavItem href="/admin" icon={Home} label="Admin Dashboard" onClick={() => setSelectedLoanId(null)} />
+          )}
+          <NavItem href="/" icon={Home} label="Dashboard" onClick={() => setSelectedLoanId(null)} />
+          <NavItem href="/reports" icon={BarChart3} label="Reports" />
+          {userRole === 'admin' && (
+            <NavItem href="/admin/settings" icon={Settings} label="Settings" />
+          )}
+        </div>
+
+        <div className="pt-4 border-t border-[#E2E8F0] space-y-1">
+          {isExpanded && <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Actions</p>}
+          {(userRole === 'creditCommitteeMember' || userRole === 'creditCommitteeOfficer' || userRole === 'admin') && (
+            <NavItem 
+              icon={ClipboardCheck} 
+              label="For Approval" 
+              badge={approvalCount} 
+              onClick={() => setShowApprovalPanel(true)} 
+            />
+          )}
+          {(userRole === 'payrollChecker' || userRole === 'admin') && (
+            <NavItem 
+              icon={DollarSign} 
+              label="Input Salary" 
+              badge={salaryCount} 
+              onClick={() => setShowSalaryInputPanel(true)} 
+            />
+          )}
+          {(userRole === 'bookkeeper' || userRole === 'admin') && (
+            <NavItem 
+              icon={Banknote} 
+              label="For Releasing" 
+              badge={releaseCount} 
+              onClick={() => setShowReleasePanel(true)} 
+            />
+          )}
         </div>
       </div>
 
-      <div className="flex-1 px-4 py-6 space-y-2">
-        {userRole === 'admin' && (
-          <Link href="/admin" className="w-full block">
-            <Button variant="ghost" className="w-full justify-start">
-              <Home className="h-4 w-4 mr-2" />
-              Admin Dashboard
-            </Button>
-          </Link>
-        )}
-        <Link href="/" className="w-full block">
-          <Button variant="ghost" className="w-full justify-start">
-            <Home className="h-4 w-4 mr-2" />
-            Dashboard
-          </Button>
-        </Link>
-        <Link href="/reports" className="w-full block">
-          <Button variant="ghost" className="w-full justify-start">
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Reports
-          </Button>
-        </Link>
-        {(userRole === 'admin' || userRole === 'bookkeeper') && (
-          <Link href="/admin/settings" className="w-full block">
-            <Button variant="ghost" className="w-full justify-start">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-          </Link>
-        )}
-        {(userRole === 'creditCommitteeMember' || userRole === 'creditCommitteeOfficer' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => setShowApprovalPanel(true)}>
-            For Approval {approvalCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{approvalCount}</span>}
-          </Button>
-        )}
-        {(userRole === 'payrollChecker' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => setShowSalaryInputPanel(true)}>
-            Input Salary {salaryCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{salaryCount}</span>}
-          </Button>
-        )}
-        {(userRole === 'bookkeeper' || userRole === 'admin') && (
-          <Button variant="outline" className="w-full justify-start" onClick={() => setShowReleasePanel(true)}>
-            For Releasing {releaseCount > 0 && <span className="ml-auto bg-red-600 text-white text-xs rounded-full px-2 py-0.5">{releaseCount}</span>}
-          </Button>
-        )}
-
-      </div>
-
-      <div className="p-6 border-t border-border">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleLogout}
-          className="w-full"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </Button>
+      {/* Logout */}
+      <div className="p-3 border-t border-[#E2E8F0]">
+        <NavItem icon={LogOut} label="Logout" onClick={handleLogout} />
       </div>
     </div>
   );

@@ -101,7 +101,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUser();
-  const { showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showPenaltyPanel, showReleasePanel } = useApprovalPanel();
+  const { showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel } = useApprovalPanel();
   const [userRole, setUserRole] = React.useState<string | null>(null);
   const [requirementDialogOpen, setRequirementDialogOpen] = React.useState(false);
   const [requirementMessage, setRequirementMessage] = React.useState('');
@@ -133,6 +133,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
       createdAt: toDate(rawLoan.createdAt) || new Date(),
       updatedAt: toDate(rawLoan.updatedAt) || new Date(),
       releasedAt: toDate(rawLoan.releasedAt) || undefined,
+      final_surcharge_date: toDate(rawLoan.final_surcharge_date) || undefined,
       loanNumber: rawLoan.loanNumber || 0,
     };
   }, [rawLoan]);
@@ -381,7 +382,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
   };
 
   const handleBackClick = () => {
-    if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showPenaltyPanel || showReleasePanel) && onBack) {
+    if ((showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel) && onBack) {
       onBack();
     } else {
       router.push('/');
@@ -477,6 +478,7 @@ export function LoanDetailViewOriginal({ loanId, onBack }: LoanDetailViewProps) 
     createdAt: loan.createdAt.toISOString(),
     updatedAt: loan.updatedAt.toISOString(),
     releasedAt: loan.releasedAt ? loan.releasedAt.toISOString() : undefined,
+    final_surcharge_date: loan.final_surcharge_date ? (loan.final_surcharge_date as Date).toISOString() : undefined,
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);

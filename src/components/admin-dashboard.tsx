@@ -89,14 +89,17 @@ export function AdminDashboard() {
         updatedAt: now,
       });
 
-      setUsers([...users, {
-        id: userId,
-        email,
-        name,
-        role,
-        createdAt: now,
-        updatedAt: now,
-      }]);
+      setUsers((prev) => {
+        const filtered = prev.filter(u => u.id !== userId);
+        return [...filtered, {
+          id: userId,
+          email,
+          name,
+          role,
+          createdAt: now,
+          updatedAt: now,
+        }];
+      });
 
       setEmail('');
       setName('');

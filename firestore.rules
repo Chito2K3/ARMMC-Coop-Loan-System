@@ -1,87 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Instead of helper functions, use explicit role checks below that
-    // accept either auth custom claim `request.auth.token.role` OR a
-    // `users/{uid}` document containing `.role`.
-    
-    // Users collection - protect role field from unauthorized changes
-    match /users/{userId} {
-      // Anyone authenticated can read user documents
-      allow read: if request.auth != null;
-      
-      // Allow user creation and migration (including role field for migration)
-      // Allow admins (via token or Firestore doc) to manage any user
-      allow create, update: if request.auth != null && (
-        request.auth.uid == userId || 
-        request.auth.token.role == 'admin' ||
+
+    // Helper: check role from custom claims OR users/{uid} document
+    function hasRole(role) {
+      return request.auth != null && (
+        request.auth.token.role == role ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
-      
-      // Allow admins to delete users
-      allow delete: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role)
       );
     }
 
-    // Loans collection - role-based access
-    match /loans/{loanId} {
-      // All authenticated users can read loans
+    function hasAnyRole(roles) {
+      return request.auth != null && (
+        request.auth.token.role in roles ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in roles)
+      );
+    }
+
+    // Users collection
+    match /users/{userId} {
       allow read: if request.auth != null;
-      
-      // Only bookkeepers and admins can create loans
-      allow create: if request.auth != null && (
-        request.auth.token.role in ['admin', 'bookkeeper'] ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'bookkeeper'])
-      );
+      allow update: if request.auth != null &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+      allow create: if request.auth != null;
+      allow delete: if false;
+    }
 
-      // Bookkeepers, committee members/officers, payrollChecker and admins can update loans
-      allow update: if request.auth != null && (
-        request.auth.token.role in ['admin', 'bookkeeper', 'creditCommitteeMember', 'creditCommitteeOfficer', 'payrollChecker'] ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'bookkeeper', 'creditCommitteeMember', 'creditCommitteeOfficer', 'payrollChecker'])
-      ) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['historical_shortfall_bucket', 'final_surcharge_total']));
+    // Loans collection
+    match /loans/{loanId} {
+      allow read: if request.auth != null;
+      allow create: if hasAnyRole(['admin', 'bookkeeper']);
+      allow update: if hasAnyRole(['admin', 'bookkeeper', 'approver', 'payrollChecker']);
+      // Admins: delete any loan. Bookkeepers: delete pending loans only.
+      allow delete: if hasRole('admin') || (hasRole('bookkeeper') && resource.data.status == 'pending');
 
-      // Only admins can delete loans
-      allow delete: if request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
-      
       // Payments subcollection
       match /payments/{paymentId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && (
-          request.auth.token.role in ['admin', 'bookkeeper'] ||
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'bookkeeper'])
-        );
+        allow create: if hasAnyRole(['admin', 'bookkeeper']);
+        allow update: if hasAnyRole(['admin', 'bookkeeper']) ||
+          (hasRole('approver') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['penaltyWaived', 'penaltyDenied', 'amount', 'updatedAt']));
+        // Bookkeepers need delete permission to cascade-delete when removing a pending loan
+        allow delete: if hasAnyRole(['admin', 'bookkeeper']);
       }
     }
 
-    // Counters collection
+    // Counters collection (for auto-incrementing loan numbers)
     match /counters/{counterId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null; // Simpler for now
+      allow write: if hasAnyRole(['admin', 'bookkeeper']);
     }
 
-    // Settings collection - anyone authenticated can read/write for now to fix initialization
+    // Settings collection (penalty settings, etc.)
     match /settings/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if hasRole('admin');
     }
 
-    // Loan Types & Purposes - anyone authenticated can read/write during transition
+    // Loan Types collection (drives Service/Loan Category dropdown)
     match /loanTypes/{typeId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if hasRole('admin');
     }
+
+    // Loan Purposes collection (drives Intended Purpose dropdown)
     match /loanPurposes/{purposeId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if hasRole('admin');
     }
   }
 }

@@ -11,6 +11,8 @@ interface ApprovalContextType {
   setShowPastDuePanel: (show: boolean) => void;
   showReleasePanel: boolean;
   setShowReleasePanel: (show: boolean) => void;
+  selectedLoanId: string | null;
+  setSelectedLoanId: (id: string | null) => void;
 }
 
 const ApprovalContext = createContext<ApprovalContextType | undefined>(undefined);
@@ -20,6 +22,7 @@ export function ApprovalProvider({ children }: { children: React.ReactNode }) {
   const [showSalaryInputPanel, setShowSalaryInputPanel] = useState(false);
   const [showPastDuePanel, setShowPastDuePanel] = useState(false);
   const [showReleasePanel, setShowReleasePanel] = useState(false);
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
 
   const value = React.useMemo(
     () => ({
@@ -31,8 +34,10 @@ export function ApprovalProvider({ children }: { children: React.ReactNode }) {
       setShowPastDuePanel,
       showReleasePanel,
       setShowReleasePanel,
+      selectedLoanId,
+      setSelectedLoanId,
     }),
-    [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel]
+    [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel, selectedLoanId]
   );
 
   return (

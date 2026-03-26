@@ -44,6 +44,8 @@ export interface Payment {
   actualAmountPaid?: number;
   status: PaymentStatus;
   penalty: number;
+  penaltyWaived?: boolean;
+  penaltyDenied?: boolean;
   shortfall_recorded?: number;
   monthly_penalty?: number;
   remarks?: string;
@@ -58,7 +60,7 @@ export interface PenaltySettings {
 
 // This type is for data coming from Firestore that needs to be serialized
 // for Next.js server components or client components.
-export type LoanSerializable = Omit<Loan, 'createdAt' | 'updatedAt' | 'releasedAt'> & {
+export type LoanSerializable = Omit<Loan, 'createdAt' | 'updatedAt' | 'releasedAt' | 'final_surcharge_date'> & {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   releasedAt?: string; // ISO string
