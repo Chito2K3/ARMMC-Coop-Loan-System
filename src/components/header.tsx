@@ -61,7 +61,7 @@ export function Header({ isSidebarExpanded, onToggleSidebar }: HeaderProps) {
       <div className="flex h-16 items-center px-4 md:px-6 gap-4">
         <div className="flex items-center gap-4 flex-1">
           <Link href="/" className="flex items-center space-x-2 mr-2">
-            <Image src="/logo.png" alt="ARMMC Logo" width={32} height={32} className="rounded-full" />
+            <Image src="/armmc-logo.jpg" alt="ARMMC Logo" width={36} height={36} className="rounded-full object-contain bg-white" />
           </Link>
           
           <div className="h-4 w-[1px] bg-[#E2E8F0] mx-1" />
