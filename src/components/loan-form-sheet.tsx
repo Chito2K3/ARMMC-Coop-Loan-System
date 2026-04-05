@@ -49,17 +49,27 @@ import { getNextLoanNumber } from "@/firebase/counter";
 import type { LoanSerializable, LoanType, LoanPurpose } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const paymentTermOptions = [1, 3, 4, 6, 9, 12, 18, 24];
+const paymentTermOptions = [1, 3, 6, 9, 12, 18, 24];
+
+const formatCurrency = (value: number) => {
+  if (isNaN(value)) return 'P0.00';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'PHP',
+  }).format(value);
+};
 
 const loanFormSchema = z.object({
   applicantName: z.string().min(2, {
     message: "Applicant name must be at least 2 characters.",
   }),
-  amount: z.coerce
-    .number({ required_error: "Amount is required", invalid_type_error: "Amount must be a number" })
-    .positive("Loan amount must be greater than 0."),
-  paymentTerm: z.coerce
-    .number()
+  amount: z.union([z.string(), z.number()])
+    .transform((val) => Number(val))
+    .refine((val) => !isNaN(val) && val > 0, {
+      message: "Loan amount must be greater than 0.",
+    }),
+  paymentTerm: z.union([z.string(), z.number()])
+    .transform((val) => Number(val))
     .refine((val) => paymentTermOptions.includes(val), {
       message: "Please select a valid payment term.",
     }),
@@ -89,6 +99,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
   const [eligibleLoans, setEligibleLoans] = React.useState<any[]>([]);
   const [selectedOldLoan, setSelectedOldLoan] = React.useState<any>(null);
   const [currentStep, setCurrentStep] = React.useState(1);
+  const [isProcessingStep, setIsProcessingStep] = React.useState(false);
 
   React.useEffect(() => {
     if (open && firestore) {
@@ -96,6 +107,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       getLoanPurposes(firestore).then(setLoanPurposes);
     } else {
       setCurrentStep(1);
+      setIsProcessingStep(false);
     }
   }, [open, firestore]);
 
@@ -128,6 +140,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
   const isRenewal = form.watch("isRenewal");
   const renewingLoanId = form.watch("renewingLoanId");
   const loanAmount = form.watch("amount");
+  const paymentTerm = form.watch("paymentTerm");
 
   React.useEffect(() => {
     const fetchApplicantLoans = async () => {
@@ -198,6 +211,77 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       setSelectedOldLoan(null);
     }
   }, [renewingLoanId, eligibleLoans]);
+
+  const computation = React.useMemo(() => {
+    if (!paymentTerm || paymentTerm <= 0 || !loanAmount)
+      return null;
+
+    const principal = Number(loanAmount) || 0;
+    const term = Number(paymentTerm) || 0;
+    const interestRate = 0.015; // 1.5% diminishing
+
+    const schedule: { month: number; beginningBalance: number; interest: number; principal: number; endingBalance: number; }[] = [];
+
+    let beginningBalance = principal;
+    let totalInterest = 0;
+    const approximateMonthlyPrincipalPayment = principal / term;
+    let totalPrincipalPaid = 0;
+
+    for (let month = 1; month <= term; month++) {
+      const interest = beginningBalance * interestRate;
+      totalInterest += interest;
+
+      let principalPayment = 0;
+      let totalMonthlyPayment = 0;
+
+      if (month === term) {
+        principalPayment = principal - totalPrincipalPaid;
+        totalMonthlyPayment = principalPayment + interest;
+      } else {
+        const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
+        totalMonthlyPayment = Math.round(exactTotalPayment);
+        principalPayment = totalMonthlyPayment - interest;
+      }
+      
+      const endingBalance = beginningBalance - principalPayment;
+
+      schedule.push({
+        month,
+        beginningBalance,
+        interest,
+        principal: principalPayment,
+        endingBalance: endingBalance < 0 ? 0 : endingBalance,
+      });
+
+      beginningBalance = endingBalance;
+      totalPrincipalPaid += principalPayment;
+    }
+    
+    const monthlyAmortizationPrincipal = Math.round(schedule[0]?.principal * 100) / 100 || 0;
+    const loanTermInYears = term / 12;
+    const serviceCharge = principal * 0.06 * loanTermInYears; 
+    const shareCapital = principal * 0.01;
+    const firstMonthInterest = schedule[0]?.interest || 0;
+    const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
+    const outstandingBalance = isRenewal ? Math.round((selectedOldLoan?.unpaidPrincipal || 0) * 100) / 100 : 0;
+    
+    const totalDeductions = serviceCharge + shareCapital + firstMonthAmortizationDeduction + firstMonthInterest + outstandingBalance;
+    const netProceeds = principal - totalDeductions;
+
+    return {
+      principal,
+      term,
+      monthlyAmortization: monthlyAmortizationPrincipal,
+      totalInterest,
+      serviceCharge,
+      shareCapital,
+      firstMonthAmortization: firstMonthAmortizationDeduction,
+      firstMonthInterest,
+      totalDeductions,
+      netProceeds,
+      outstandingBalance,
+    };
+  }, [loanAmount, paymentTerm, selectedOldLoan, isRenewal]);
 
   async function onSubmit(data: LoanFormValues) {
     if (!firestore) return;
@@ -534,6 +618,43 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                           </div>
                        </div>
 
+                       {computation && (
+                         <div className="space-y-4 pt-4 border-t border-[#E2E8F0]">
+                           <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Itemized Deductions</h3>
+                           <div className="bg-[#1A1A1A] text-white rounded-2xl p-6 space-y-3 shadow-xl">
+                             <div className="flex justify-between items-center text-sm text-white/80">
+                               <span>Service Charge (6% per year)</span>
+                               <span className="font-medium text-white">{formatCurrency(computation.serviceCharge)}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm text-white/80">
+                               <span>Share Capital (1%)</span>
+                               <span className="font-medium text-white">{formatCurrency(computation.shareCapital)}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm text-white/80">
+                               <span>First Month Amortization</span>
+                               <span className="font-medium text-white">{formatCurrency(computation.firstMonthAmortization)}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm text-white/80">
+                               <span>First Month Interest</span>
+                               <span className="font-medium text-white">{formatCurrency(computation.firstMonthInterest)}</span>
+                             </div>
+                             
+                             {computation.outstandingBalance > 0 && (
+                               <div className="flex justify-between items-center text-sm text-white/80 pt-2 border-t border-white/10">
+                                 <span className="text-red-400">Outstanding Balance (Renewal)</span>
+                                 <span className="font-bold text-red-400">- {formatCurrency(computation.outstandingBalance)}</span>
+                               </div>
+                             )}
+
+                             <div className="pt-4 mt-2 border-t border-white/20 flex justify-between items-center">
+                               <span className="font-bold uppercase tracking-widest text-[10px] text-white/60">Net Proceeds</span>
+                               <span className="font-black text-2xl text-green-400">{formatCurrency(computation.netProceeds)}</span>
+                             </div>
+                           </div>
+                         </div>
+                       )}
+                       
+
                        <FormField
                         control={form.control}
                         name="remarks"
@@ -567,22 +688,51 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                     <Button
                       type="button"
                       onClick={async () => {
+                        if (isProcessingStep) return;
+                        setIsProcessingStep(true);
+
                         // Validate current step before proceeding
                         let fieldsToValidate: any = [];
                         if (currentStep === 1) fieldsToValidate = ['applicantName', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
                         if (currentStep === 2) fieldsToValidate = ['amount', 'paymentTerm'];
                         
-                        const isValid = await form.trigger(fieldsToValidate);
-                        if (isValid) setCurrentStep(currentStep + 1);
+                        try {
+                          const isValid = await form.trigger(fieldsToValidate);
+                          if (isValid) {
+                            setCurrentStep(currentStep + 1);
+                            // Unlock the next step button after 400ms to prevent phantom double-clicks
+                            setTimeout(() => setIsProcessingStep(false), 400);
+                          } else {
+                            setIsProcessingStep(false);
+                          }
+                        } catch (e: any) {
+                          setIsProcessingStep(false);
+                          console.error("Zod trigger unhandled error:", e);
+                          // Fallback to manually setting errors if zodResolver throws them directly
+                          if (Array.isArray(e)) {
+                            e.forEach(issue => {
+                              if (issue.path && issue.path[0]) {
+                                form.setError(issue.path[0] as any, { type: 'custom', message: issue.message });
+                              }
+                            });
+                          } else if (e?.issues) {
+                            e.issues.forEach((issue: any) => {
+                              if (issue.path && issue.path[0]) {
+                                form.setError(issue.path[0], { type: 'custom', message: issue.message });
+                              }
+                            });
+                          }
+                        }
                       }}
                       className="h-14 px-12 text-base font-bold"
-                      disabled={currentStep === 1 && !applicantName}
+                      disabled={currentStep === 1 && !applicantName || isProcessingStep}
                     >
+                      {isProcessingStep ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Continue
                     </Button>
                   ) : (
-                    <Button type="submit" disabled={form.formState.isSubmitting} className="h-14 px-12 text-base font-bold shadow-xl shadow-primary/20">
-                      {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <Button type="submit" disabled={form.formState.isSubmitting || isProcessingStep} className="h-14 px-12 text-base font-bold shadow-xl shadow-primary/20">
+                      {(form.formState.isSubmitting || isProcessingStep) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Submit Application
                     </Button>
                   )}

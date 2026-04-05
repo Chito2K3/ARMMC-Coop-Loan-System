@@ -80,6 +80,8 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   const [gracePeriodDays, setGracePeriodDays] = React.useState(3);
   const [editingPaymentId, setEditingPaymentId] = React.useState<string | null>(null);
   const [editAmount, setEditAmount] = React.useState<number | ''>('');
+  const [isAuditDialogOpen, setIsAuditDialogOpen] = React.useState(false);
+  const [auditPaymentAmount, setAuditPaymentAmount] = React.useState<number | ''>('');
 
   React.useEffect(() => {
     const loadSettings = async () => {
@@ -122,36 +124,53 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       }
     });
     
-    // Total shortfall including historical bucket
-    const effectiveShortfall = Math.max(loan.historical_shortfall_bucket || 0, shortfall);
+    // Total shortfall including historical bucket, fixing float math errors
+    const effectiveShortfall = Math.round(Math.max(loan.historical_shortfall_bucket || 0, shortfall) * 100) / 100;
     // Double 2% penalty -> 4%
-    const surcharge = effectiveShortfall * 0.04;
+    let surcharge = effectiveShortfall * 0.04;
+    
+    // Prevent zero-value ghost surcharges due to 0.00 rendering
+    if (surcharge < 0.01) {
+      surcharge = 0;
+    }
     
     // Check if surcharge is paid
-    const isPending = effectiveShortfall > 0 && (loan.final_surcharge_paid || 0) < surcharge;
+    const isPending = effectiveShortfall > 0 && surcharge > 0 && (loan.final_surcharge_paid || 0) < surcharge - 0.01;
     
     return { totalShortfall: effectiveShortfall, surchargeAmount: surcharge, isSurchargePending: isPending };
   }, [payments, loan.historical_shortfall_bucket, loan.final_surcharge_paid]);
 
   const handleSettleSurcharge = async () => {
     if (!firestore) return;
+    const amount = Number(auditPaymentAmount);
+    if (amount <= 0) {
+      toast({ title: 'Invalid Amount', description: 'Please enter a valid amount.', variant: 'destructive' });
+      return;
+    }
+    
+    // Check if what they paid plus past payments satisfies the surcharge
+    const totalPaidNow = (loan.final_surcharge_paid || 0) + amount;
+
     try {
       const loanRef = doc(firestore, 'loans', loan.id);
       
       await updateDocumentNonBlocking(loanRef, {
-        final_surcharge_paid: surchargeAmount,
+        final_surcharge_paid: totalPaidNow,
         final_surcharge_date: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       
       toast({
-        title: 'Surcharge Settled',
-        description: 'The historical shortfall surcharge has been paid.',
+        title: 'Surcharge Payment Recorded',
+        description: 'The audit payment has been applied.',
       });
+
+      setIsAuditDialogOpen(false);
+      setAuditPaymentAmount('');
       
       // Check if all payments are paid
       const allPaid = payments.every(p => p.status === 'paid');
-      if (allPaid) {
+      if (allPaid && totalPaidNow >= surchargeAmount - 0.01) {
         await updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
         toast({
           title: 'Loan Fully Paid!',
@@ -637,7 +656,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                   </TableCell>
                   <TableCell className="text-center">
                     {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && isSurchargePending && (
-                       <Button size="sm" variant="destructive" onClick={handleSettleSurcharge} className="w-full">Settle</Button>
+                       <Button size="sm" variant="destructive" onClick={() => setIsAuditDialogOpen(true)} className="w-full">Settle</Button>
                     )}
                     {!isSurchargePending && <span className="text-sm font-bold text-green-600">Paid</span>}
                   </TableCell>
@@ -688,6 +707,52 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
             </Button>
             <Button onClick={handleEditAmountSave}>
               Save Amount
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settle Audit Surcharge Dialog */}
+      <Dialog open={isAuditDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsAuditDialogOpen(false);
+          setAuditPaymentAmount('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Settle Surcharge Offset</DialogTitle>
+            <DialogDescription>
+              Enter the amount collected to offset the historical shortfall & penalty. 
+              Total Required: <span className="font-bold text-destructive">{formatCurrency(surchargeAmount - (loan.final_surcharge_paid || 0))}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="audit-amount">Amount Settled</Label>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-muted-foreground">₱</span>
+                <Input
+                  id="audit-amount"
+                  type="number"
+                  placeholder="0.00"
+                  value={auditPaymentAmount}
+                  onChange={(e) => setAuditPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="pl-6"
+                  autoFocus
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsAuditDialogOpen(false);
+              setAuditPaymentAmount('');
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSettleSurcharge}>
+              Confirm Settle
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -144,7 +144,7 @@ export function LoanComputationDialog({
       term,
       monthlyAmortization: monthlyAmortizationPrincipal,
       totalInterest,
-      schedule,
+      schedule: term > 1 ? schedule.slice(1) : schedule,
       serviceCharge,
       shareCapital,
       firstMonthAmortization: firstMonthAmortizationDeduction,
@@ -264,6 +264,17 @@ export function LoanComputationDialog({
                   {formatCurrency(computation.firstMonthInterest)}
                 </span>
               </div>
+
+              {computation.term > 1 && (
+                <div className="flex justify-between text-base">
+                  <span className="text-muted-foreground">
+                    First Month Principal (Deducted upfront)
+                  </span>
+                  <span className="font-medium">
+                    {formatCurrency(computation.monthlyAmortization)}
+                  </span>
+                </div>
+              )}
 
               {computation.outstandingBalance > 0 && (
                 <div className="flex justify-between text-base pt-2 border-t border-dashed border-red-500/20">

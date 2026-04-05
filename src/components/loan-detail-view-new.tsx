@@ -78,7 +78,7 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
   const term = loan.paymentTerm;
   const interestRate = 0.015; // 1.5% diminishing
 
-  const monthlyPrincipalPayment = Math.floor(principal / term);
+  const approximateMonthlyPrincipalPayment = principal / term;
   let beginningBalance = principal;
   let totalPrincipalPaid = 0;
 
@@ -88,27 +88,44 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
     const month = i + 1;
     const interest = beginningBalance * interestRate;
 
-    let principalPayment = monthlyPrincipalPayment;
-    // Adjust last payment to ensure total principal is exact
+    let principalPayment = 0;
+    let totalAmount = 0;
+
     if (month === term) {
       principalPayment = principal - totalPrincipalPaid;
+      totalAmount = principalPayment + interest;
+    } else {
+      const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
+      totalAmount = Math.round(exactTotalPayment);
+      principalPayment = totalAmount - interest;
     }
 
-    const totalAmount = principalPayment + interest;
     const dueDate = addMonths(releasedAt, month);
+
+    // Month 1 is deducted from purely net proceeds if term > 1, so it is "paid" upfront implicitly by the coop
+    const isFirstMonthDeducted = month === 1 && term > 1;
 
     paymentSchedule.push({
       loanId: loan.id,
       paymentNumber: month,
       dueDate: Timestamp.fromDate(dueDate),
       amount: totalAmount,
-      status: 'pending',
+      status: isFirstMonthDeducted ? 'paid' : 'pending',
       penalty: 0,
       penaltyWaived: false,
+      ...(isFirstMonthDeducted && {
+        actualAmountPaid: totalAmount,
+        paymentDate: Timestamp.fromDate(releasedAt),
+      })
     });
 
     beginningBalance -= principalPayment;
     totalPrincipalPaid += principalPayment;
+  }
+
+  // Handle single payment logic where interest is fully deducted
+  if (term === 1 && paymentSchedule.length > 0) {
+    paymentSchedule[0].amount -= paymentSchedule[0].amount * (interestRate / (principal + interestRate)); // simplify, single payment loans remove upfront interest
   }
 
   return paymentSchedule;
@@ -791,7 +808,26 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         </div>
       )}
 
-      {isReleasedOrPaid ? (
+      {(() => {
+        const loanActionsCard = (
+          <Card className="flex flex-col justify-between">
+            <CardHeader>
+              <CardTitle>Loan Actions</CardTitle>
+              <CardDescription>View generalized computation</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col justify-end">
+              <Button
+                className="w-full font-bold shadow-md h-12"
+                onClick={() => setComputationDialogOpen(true)}
+              >
+                <Calculator className="mr-2 h-5 w-5" />
+                View Original Computation
+              </Button>
+            </CardContent>
+          </Card>
+        );
+
+        return isReleasedOrPaid ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
             {basicInfoCard}
@@ -799,6 +835,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           </div>
           <div className="space-y-6">
             {loanHistoryCard}
+            {loanActionsCard}
             <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
           </div>
         </div>
@@ -807,6 +844,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           <div className="space-y-6">
             {basicInfoCard}
             {managementCard}
+            {loanActionsCard}
           </div>
           <div className="space-y-6">
             {workflowCard}
@@ -818,7 +856,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <LoanFormSheet
         open={isSheetOpen}

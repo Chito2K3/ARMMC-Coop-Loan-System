@@ -45,6 +45,12 @@ export function LoginPage() {
                         setIsLoading(false);
                         return;
                     }
+                    // Force redirect to appropriate dashboard upon login
+                    if (userProfile.role === 'admin') {
+                        window.location.href = '/admin';
+                    } else {
+                        window.location.href = '/';
+                    }
                 } catch (userError) {
                     console.error("Error fetching user profile:", userError);
                     await signOut(auth);
