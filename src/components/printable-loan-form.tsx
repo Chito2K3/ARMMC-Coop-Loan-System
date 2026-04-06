@@ -61,6 +61,12 @@ function computeLoanDetails(loan: Loan) {
   return { monthlyAmortization, serviceCharge, shareCapital, firstMonthInterest, firstMonthAmortization, totalDeductions, netProceeds, outstandingBalance, totalInterest };
 }
 
+const CheckMark = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
 export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
   const computation = computeLoanDetails(loan);
   const isRenewal = !!loan.renewalOf;
@@ -77,12 +83,12 @@ export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
   const cellStyle: React.CSSProperties = {
     border: '1px solid #000',
     padding: '4px 6px',
-    fontSize: '9px',
+    fontSize: '11px',
     verticalAlign: 'top',
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: '8px',
+    fontSize: '9px',
     fontWeight: 'bold',
     marginBottom: '2px',
     display: 'block',
@@ -90,23 +96,20 @@ export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
 
   const lineStyle: React.CSSProperties = {
     borderBottom: '1px solid #000',
-    minHeight: '14px',
     marginTop: '2px',
     marginBottom: '6px',
     display: 'block',
-    fontSize: '9px',
+    fontSize: '11px',
   };
 
   const checkboxStyle: React.CSSProperties = {
-    display: 'inline-block',
-    width: '10px',
-    height: '10px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '12px',
+    height: '12px',
     border: '1px solid #000',
-    marginRight: '4px',
-    textAlign: 'center',
-    lineHeight: '10px',
-    fontSize: '8px',
-    verticalAlign: 'middle',
+    marginRight: '6px',
   };
 
   return (
@@ -119,7 +122,7 @@ export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
         padding: '32px 40px',
         fontFamily: 'Arial, sans-serif',
         color: '#000',
-        fontSize: '9px',
+        fontSize: '11px',
         position: 'absolute',
         top: '-9999px',
         left: '-9999px',
@@ -127,127 +130,136 @@ export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
       }}
     >
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/armmc-logo.jpg" crossOrigin="anonymous" alt="ARMMC Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
           <div>
-            <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.4' }}>Amang Rodriguez Memorial Medical Center</div>
-            <div style={{ fontSize: '9px' }}>Multi-Purpose Cooperative</div>
-            <div style={{ fontSize: '9px' }}>Marikina City</div>
+            <div style={{ fontWeight: 'bold', fontSize: '12px', lineHeight: '1.4' }}>Amang Rodriguez Memorial Medical Center</div>
+            <div style={{ fontSize: '11px' }}>Multi-Purpose Cooperative</div>
+            <div style={{ fontSize: '11px' }}>Marikina City</div>
           </div>
         </div>
-        <div style={{ border: '1px solid #000', padding: '6px 10px', fontSize: '9px', minWidth: '150px' }}>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
+        <div style={{ border: '1px solid #000', padding: '8px 12px', minWidth: '180px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-end' }}>
             <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Application #:</span>
-            <span style={{ borderBottom: '1px solid #000', flex: 1 }}>{loan.loanNumber}</span>
+            <div style={{ borderBottom: '1px solid #000', flex: 1 }}><div style={{ paddingBottom: '2px', paddingLeft: '8px' }}>{loan.loanNumber}</div></div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
             <span style={{ fontWeight: 'bold' }}>Date:</span>
-            <span style={{ borderBottom: '1px solid #000', flex: 1 }}>{createdDate}</span>
+            <div style={{ borderBottom: '1px solid #000', flex: 1 }}><div style={{ paddingBottom: '2px', paddingLeft: '8px' }}>{createdDate}</div></div>
           </div>
         </div>
       </div>
 
       {/* TITLE */}
-      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '12px', textDecoration: 'underline', marginBottom: '10px' }}>
+      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14px', textDecoration: 'underline', marginBottom: '12px' }}>
         LOAN APPLICATION FORM
       </div>
 
       {/* NAME LINE */}
-      <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', marginBottom: '6px' }}>
-        <span style={{ fontWeight: 'bold', fontSize: '9px', whiteSpace: 'nowrap' }}>Name:</span>
-        <span style={{ borderBottom: '1px solid #000', flex: 1, minHeight: '14px', fontSize: '10px', fontWeight: 'bold', paddingBottom: '1px' }}>{loan.applicantName}</span>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '10px' }}>
+        <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Name:</span>
+        <div style={{ borderBottom: '1px solid #000', flex: 1, fontWeight: 'bold' }}><div style={{ paddingBottom: '2px', paddingLeft: '8px' }}>{loan.applicantName}</div></div>
       </div>
 
       {/* MEMBERSHIP TYPE */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-        <span style={{ fontWeight: 'bold', fontSize: '9px' }}>Type of Membership</span>
-        <span>
-          <span style={{ ...checkboxStyle }}>{isInService ? '✓' : ''}</span>
-          <span style={{ fontSize: '9px' }}>In-Service Member</span>
-        </span>
-        <span>
-          <span style={{ ...checkboxStyle }}>{isSeparated ? '✓' : ''}</span>
-          <span style={{ fontSize: '9px' }}>Separated from Service Member</span>
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
+        <span style={{ fontWeight: 'bold' }}>Type of Membership</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ ...checkboxStyle }}>{isInService ? <CheckMark /> : null}</span>
+          <span>In-Service Member</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ ...checkboxStyle }}>{isSeparated ? <CheckMark /> : null}</span>
+          <span>Separated from Service Member</span>
+        </div>
       </div>
 
       {/* PURPOSE */}
-      <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', marginBottom: '6px' }}>
-        <span style={{ fontWeight: 'bold', fontSize: '9px', whiteSpace: 'nowrap' }}>Purpose of Loan:</span>
-        <span style={{ borderBottom: '1px solid #000', flex: 1, minHeight: '14px', fontSize: '9px', paddingBottom: '1px' }}>{loan.purpose}</span>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '10px' }}>
+        <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Purpose of Loan:</span>
+        <div style={{ borderBottom: '1px solid #000', flex: 1 }}><div style={{ paddingBottom: '2px', paddingLeft: '8px' }}>{loan.purpose}</div></div>
       </div>
 
       {/* AMOUNT IN WORDS */}
-      <div style={{ marginBottom: '6px', fontSize: '9px' }}>
+      <div style={{ marginBottom: '10px' }}>
         <div>*I hereby apply for the loan of (amount in words):</div>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', marginTop: '2px' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', marginTop: '6px' }}>
           <span style={{ whiteSpace: 'nowrap' }}>( Php</span>
-          <span style={{ borderBottom: '1px solid #000', flex: 1, fontSize: '9px' }}>{formatCurrency(loan.amount)}</span>
+          <div style={{ borderBottom: '1px solid #000', minWidth: '80px', fontWeight: 'bold', textAlign: 'center' }}><div style={{ paddingBottom: '2px', padding: '0 8px' }}>{formatCurrency(loan.amount)}</div></div>
           <span>)</span>
-          <span style={{ borderBottom: '1px solid #000', flex: 2, fontSize: '9px' }}>{amountInWords}</span>
+          <div style={{ borderBottom: '1px solid #000', flex: 1, fontWeight: 'bold' }}><div style={{ paddingBottom: '2px', paddingLeft: '8px' }}>{amountInWords}</div></div>
         </div>
       </div>
 
       {/* MONTHLY AMORTIZATION ROW */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '6px', fontSize: '9px', alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', alignItems: 'flex-end' }}>
         <span style={{ whiteSpace: 'nowrap' }}>Monthly Amortization: Amount Php</span>
-        <span style={{ borderBottom: '1px solid #000', width: '90px' }}>{formatCurrency(computation.monthlyAmortization)}</span>
+        <div style={{ borderBottom: '1px solid #000', minWidth: '100px', fontWeight: 'bold', textAlign: 'center' }}><div style={{ paddingBottom: '2px', padding: '0 8px' }}>{formatCurrency(computation.monthlyAmortization)}</div></div>
         <span style={{ whiteSpace: 'nowrap' }}>Pesos</span>
-        <span style={{ whiteSpace: 'nowrap' }}>Terms:</span>
-        <span style={{ borderBottom: '1px solid #000', width: '50px' }}>{loan.paymentTerm}</span>
+        <span style={{ whiteSpace: 'nowrap', marginLeft: '12px' }}>Terms:</span>
+        <div style={{ borderBottom: '1px solid #000', minWidth: '60px', fontWeight: 'bold', textAlign: 'center' }}><div style={{ paddingBottom: '2px', padding: '0 8px' }}>{loan.paymentTerm}</div></div>
         <span>month/s</span>
       </div>
 
       {/* TYPE OF LOAN BOX */}
-      <div style={{ border: '1px solid #000', padding: '6px', marginBottom: '8px', fontSize: '9px' }}>
+      <div style={{ border: '1px solid #000', padding: '8px', marginBottom: '12px' }}>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
           <div>
             <span style={{ fontWeight: 'bold' }}>TYPE OF LOAN:</span>
           </div>
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 20px' }}>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ ...checkboxStyle }}>{!isEmergency ? '✓' : ''}</span>
+              <span style={{ ...checkboxStyle }}>{!isEmergency ? <CheckMark /> : null}</span>
               <span>Regular Loan</span>
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>
-                  <span style={{ ...checkboxStyle }}>{!isRenewal ? '✓' : ''}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ ...checkboxStyle }}>{!isRenewal ? <CheckMark /> : null}</span>
                   <span>New</span>
-                </span>
-                <span>
-                  <span style={{ ...checkboxStyle }}>{isRenewal && !isEmergency ? '✓' : ''}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ ...checkboxStyle }}>{isRenewal && !isEmergency ? <CheckMark /> : null}</span>
                   <span>Renewal</span>
-                </span>
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ ...checkboxStyle }}>{isEmergency ? '✓' : ''}</span>
+              <span style={{ ...checkboxStyle }}>{isEmergency ? <CheckMark /> : null}</span>
               <span>Emergency Loan</span>
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>
-                  <span style={{ ...checkboxStyle }}>{!isRenewal ? '✓' : ''}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ ...checkboxStyle }}>{!isRenewal ? <CheckMark /> : null}</span>
                   <span>New</span>
-                </span>
-                <span>
-                  <span style={{ ...checkboxStyle }}>{isRenewal && isEmergency ? '✓' : ''}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ ...checkboxStyle }}>{isRenewal && isEmergency ? <CheckMark /> : null}</span>
                   <span>Renewal</span>
-                </span>
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ ...checkboxStyle }}></span>
               <span>Others, please specify:</span>
-              <span style={{ borderBottom: '1px solid #000', flex: 1, marginLeft: '4px' }}></span>
+              <span style={{ borderBottom: '1px solid #000', flex: 1, marginLeft: '6px' }}></span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span><span style={{ ...checkboxStyle }}></span>Clothing</span>
-              <span><span style={{ ...checkboxStyle }}></span>Mid-year Bonus</span>
-              <span><span style={{ ...checkboxStyle }}></span>Year-end Bonus</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ ...checkboxStyle }}></span>
+                <span>Clothing</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ ...checkboxStyle }}></span>
+                <span>Mid-year Bonus</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ ...checkboxStyle }}></span>
+                <span>Year-end Bonus</span>
+              </div>
             </div>
           </div>
         </div>
