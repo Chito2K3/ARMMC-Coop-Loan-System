@@ -14,6 +14,7 @@ import {
   DollarSign,
   Banknote,
   ClipboardCheck,
+  Printer,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { addMonths, format } from 'date-fns';
@@ -67,6 +68,7 @@ import { ExistingLoansCheck } from './existing-loans-check';
 import { LoanComputationDialog } from './loan-computation-dialog';
 import { CollectionSchedule } from './collection-schedule';
 import { useApprovalPanel } from './approval-context';
+import { PrintableLoanForm } from './printable-loan-form';
 
 const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
   if (!releasedAt || loan.paymentTerm <= 0) return [];
@@ -200,12 +202,14 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isPrinting, setIsPrinting] = React.useState(false);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
   const [isDenyDialogOpen, setDenyDialogOpen] = React.useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [isComputationDialogOpen, setComputationDialogOpen] =
     React.useState(false);
   const [denialRemarks, setDenialRemarks] = React.useState('');
+  const printRef = React.useRef<HTMLDivElement>(null!);
 
   const handleUpdate = async (data: Partial<LoanWrite>) => {
     if (!loanRef) return;
@@ -232,6 +236,33 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!printRef.current || !loan) return;
+    setIsPrinting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Loan-Application-${loan.applicantName}-#${loan.loanNumber}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({ variant: 'destructive', title: 'Print Failed', description: 'Could not generate PDF. Please try again.' });
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -455,9 +486,21 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             Loan #{loan.loanNumber}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Current Status</p>
-          <StatusBadge status={loan.status} />
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={isPrinting}
+            className="flex items-center gap-2 border-blue-300 text-blue-600 hover:bg-blue-50"
+          >
+            <Printer className="h-4 w-4" />
+            {isPrinting ? 'Generating...' : 'Print'}
+          </Button>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Current Status</p>
+            <StatusBadge status={loan.status} />
+          </div>
         </div>
       </div>
 
@@ -778,6 +821,9 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         onOpenChange={setSheetOpen}
         loan={loanSerializable}
       />
+
+      {/* Hidden printable form - rendered off-screen for PDF capture */}
+      <PrintableLoanForm loan={loan} formRef={printRef} />
 
       <AlertDialog open={requirementDialogOpen} onOpenChange={setRequirementDialogOpen}>
         <AlertDialogContent>

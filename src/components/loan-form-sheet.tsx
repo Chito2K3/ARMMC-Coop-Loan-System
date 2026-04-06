@@ -63,6 +63,9 @@ const loanFormSchema = z.object({
   applicantName: z.string().min(2, {
     message: "Applicant name must be at least 2 characters.",
   }),
+  membershipType: z.enum(["In-Service Member", "Separated from Service Member"], {
+    required_error: "Please select a membership type.",
+  }),
   amount: z.union([z.string(), z.number()])
     .transform((val) => Number(val))
     .refine((val) => !isNaN(val) && val > 0, {
@@ -116,6 +119,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     defaultValues: isEditMode
       ? {
           applicantName: loan.applicantName,
+          membershipType: (loan.membershipType as "In-Service Member" | "Separated from Service Member") || "In-Service Member",
           amount: loan.amount,
           paymentTerm: loan.paymentTerm,
           loanType: loan.loanType,
@@ -126,6 +130,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
         }
       : {
           applicantName: "",
+          membershipType: "In-Service Member",
           amount: 0,
           paymentTerm: 6,
           loanType: "",
@@ -405,6 +410,28 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                                 onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                               />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="membershipType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Type of Membership</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="h-14 text-lg border-[#E2E8F0] shadow-none">
+                                  <SelectValue placeholder="Select membership type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="In-Service Member">In-Service Member</SelectItem>
+                                <SelectItem value="Separated from Service Member">Separated from Service Member</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -693,7 +720,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
 
                         // Validate current step before proceeding
                         let fieldsToValidate: any = [];
-                        if (currentStep === 1) fieldsToValidate = ['applicantName', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
+                        if (currentStep === 1) fieldsToValidate = ['applicantName', 'membershipType', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
                         if (currentStep === 2) fieldsToValidate = ['amount', 'paymentTerm'];
                         
                         try {
