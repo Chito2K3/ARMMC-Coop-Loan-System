@@ -1,0 +1,1141 @@
+﻿commit 7a731a479dff19263b1aab70d8f0675028e16234
+Author: Chito2K3 <120994847+Chito2K3@users.noreply.github.com>
+Date:   Mon Apr 6 09:41:23 2026 +0800
+
+    feat: implement membership type and print to PDF functionality
+
+diff --git a/package-lock.json b/package-lock.json
+index 5df1760..0eba1ff 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -39,6 +39,8 @@
+         "embla-carousel-react": "^8.6.0",
+         "firebase": "^11.9.1",
+         "genkit": "^1.20.0",
++        "html2canvas": "^1.4.1",
++        "jspdf": "^4.2.1",
+         "lucide-react": "^0.475.0",
+         "next": "^15.5.7",
+         "patch-package": "^8.0.0",
+@@ -318,9 +320,9 @@
+       }
+     },
+     "node_modules/@babel/runtime": {
+-      "version": "7.28.4",
+-      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.28.4.tgz",
+-      "integrity": "sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==",
++      "version": "7.29.2",
++      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.2.tgz",
++      "integrity": "sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==",
+       "engines": {
+         "node": ">=6.9.0"
+       }
+@@ -7783,6 +7785,11 @@
+         "undici-types": "~6.19.2"
+       }
+     },
++    "node_modules/@types/pako": {
++      "version": "2.0.4",
++      "resolved": "https://registry.npmjs.org/@types/pako/-/pako-2.0.4.tgz",
++      "integrity": "sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw=="
++    },
+     "node_modules/@types/pg": {
+       "version": "8.6.1",
+       "resolved": "https://registry.npmjs.org/@types/pg/-/pg-8.6.1.tgz",
+@@ -7805,6 +7812,12 @@
+         "@types/pg": "*"
+       }
+     },
++    "node_modules/@types/raf": {
++      "version": "3.4.3",
++      "resolved": "https://registry.npmjs.org/@types/raf/-/raf-3.4.3.tgz",
++      "integrity": "sha512-c4YAvMedbPZ5tEyxzQdMoOhhJ4RD3rngZIdwC2/qDN3d7JpEhB6fiBRKVY1lg5B7Wk+uPBjn5f39j1/2MY1oOw==",
++      "optional": true
++    },
+     "node_modules/@types/react": {
+       "version": "19.2.7",
+       "resolved": "https://registry.npmjs.org/@types/react/-/react-19.2.7.tgz",
+@@ -7884,6 +7897,12 @@
+       "devOptional": true,
+       "license": "MIT"
+     },
++    "node_modules/@types/trusted-types": {
++      "version": "2.0.7",
++      "resolved": "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz",
++      "integrity": "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==",
++      "optional": true
++    },
+     "node_modules/@types/yauzl": {
+       "version": "2.10.3",
+       "resolved": "https://registry.npmjs.org/@types/yauzl/-/yauzl-2.10.3.tgz",
+@@ -8920,6 +8939,14 @@
+       "integrity": "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==",
+       "dev": true
+     },
++    "node_modules/base64-arraybuffer": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/base64-arraybuffer/-/base64-arraybuffer-1.0.2.tgz",
++      "integrity": "sha512-I3yl4r9QB5ZRY3XuJVEPfc2XhZO6YweFPI+UovAzn+8/hb3oJ6lnysaFcjVpkCPfVWFUDvoZ8kmVDP7WyRtYtQ==",
++      "engines": {
++        "node": ">= 0.6.0"
++      }
++    },
+     "node_modules/base64-js": {
+       "version": "1.5.1",
+       "resolved": "https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz",
+@@ -9203,6 +9230,25 @@
+         }
+       ]
+     },
++    "node_modules/canvg": {
++      "version": "3.0.11",
++      "resolved": "https://registry.npmjs.org/canvg/-/canvg-3.0.11.tgz",
++      "integrity": "sha512-5ON+q7jCTgMp9cjpu4Jo6XbvfYwSB2Ow3kzHKfIyJfaCAOHLbdKPQqGKgfED/R5B+3TFFfe8pegYA+b423SRyA==",
++      "optional": true,
++      "dependencies": {
++        "@babel/runtime": "^7.12.5",
++        "@types/raf": "^3.4.0",
++        "core-js": "^3.8.3",
++        "raf": "^3.4.1",
++        "regenerator-runtime": "^0.13.7",
++        "rgbcolor": "^1.0.1",
++        "stackblur-canvas": "^2.0.0",
++        "svg-pathdata": "^6.0.3"
++      },
++      "engines": {
++        "node": ">=10.0.0"
++      }
++    },
+     "node_modules/chalk": {
+       "version": "4.1.2",
+       "resolved": "https://registry.npmjs.org/chalk/-/chalk-4.1.2.tgz",
+@@ -9617,6 +9663,17 @@
+       "integrity": "sha512-QADzlaHc8icV8I7vbaJXJwod9HWYp8uCqf1xa4OfNu1T7JVxQIrUgOWtHdNDtPiywmFbiS12VjotIXLrKM3orQ==",
+       "license": "MIT"
+     },
++    "node_modules/core-js": {
++      "version": "3.49.0",
++      "resolved": "https://registry.npmjs.org/core-js/-/core-js-3.49.0.tgz",
++      "integrity": "sha512-es1U2+YTtzpwkxVLwAFdSpaIMyQaq0PBgm3YD1W3Qpsn1NAmO3KSgZfu+oGSWVu6NvLHoHCV/aYcsE5wiB7ALg==",
++      "hasInstallScript": true,
++      "optional": true,
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/core-js"
++      }
++    },
+     "node_modules/cors": {
+       "version": "2.8.5",
+       "resolved": "https://registry.npmjs.org/cors/-/cors-2.8.5.tgz",
+@@ -9653,6 +9710,14 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/css-line-break": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/css-line-break/-/css-line-break-2.1.0.tgz",
++      "integrity": "sha512-FHcKFCZcAha3LwfVBhCQbW2nCNbkZXn7KVUJcsT5/P8YmfsVja0FMPJr0B903j/E69HUphKiV9iQArX8SDYA4w==",
++      "dependencies": {
++        "utrie": "^1.0.2"
++      }
++    },
+     "node_modules/cssesc": {
+       "version": "3.0.0",
+       "resolved": "https://registry.npmjs.org/cssesc/-/cssesc-3.0.0.tgz",
+@@ -10016,6 +10081,15 @@
+         "csstype": "^3.0.2"
+       }
+     },
++    "node_modules/dompurify": {
++      "version": "3.3.3",
++      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.3.3.tgz",
++      "integrity": "sha512-Oj6pzI2+RqBfFG+qOaOLbFXLQ90ARpcGG6UePL82bJLtdsa6CYJD7nmiU8MW9nQNOtCHV3lZ/Bzq1X0QYbBZCA==",
++      "optional": true,
++      "optionalDependencies": {
++        "@types/trusted-types": "^2.0.7"
++      }
++    },
+     "node_modules/dot-prop": {
+       "version": "6.0.1",
+       "resolved": "https://registry.npmjs.org/dot-prop/-/dot-prop-6.0.1.tgz",
+@@ -11264,6 +11338,16 @@
+       "integrity": "sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==",
+       "dev": true
+     },
++    "node_modules/fast-png": {
++      "version": "6.4.0",
++      "resolved": "https://registry.npmjs.org/fast-png/-/fast-png-6.4.0.tgz",
++      "integrity": "sha512-kAqZq1TlgBjZcLr5mcN6NP5Rv4V2f22z00c3g8vRrwkcqjerx7BEhPbOnWCPqaHUl2XWQBJQvOT/FQhdMT7X/Q==",
++      "dependencies": {
++        "@types/pako": "^2.0.3",
++        "iobuffer": "^5.3.2",
++        "pako": "^2.1.0"
++      }
++    },
+     "node_modules/fast-uri": {
+       "version": "3.1.0",
+       "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.0.tgz",
+@@ -11356,6 +11440,11 @@
+         "node": "^12.20 || >= 14.13"
+       }
+     },
++    "node_modules/fflate": {
++      "version": "0.8.2",
++      "resolved": "https://registry.npmjs.org/fflate/-/fflate-0.8.2.tgz",
++      "integrity": "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A=="
++    },
+     "node_modules/file-entry-cache": {
+       "version": "8.0.0",
+       "resolved": "https://registry.npmjs.org/file-entry-cache/-/file-entry-cache-8.0.0.tgz",
+@@ -12283,6 +12372,18 @@
+       "license": "MIT",
+       "optional": true
+     },
++    "node_modules/html2canvas": {
++      "version": "1.4.1",
++      "resolved": "https://registry.npmjs.org/html2canvas/-/html2canvas-1.4.1.tgz",
++      "integrity": "sha512-fPU6BHNpsyIhr8yyMpTLLxAbkaK8ArIBcmZIRiBLiDhjeqvXolaEmDGmELFuX9I4xDcaKKcJl+TKZLqruBbmWA==",
++      "dependencies": {
++        "css-line-break": "^2.1.0",
++        "text-segmentation": "^1.0.3"
++      },
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
+     "node_modules/http-errors": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/http-errors/-/http-errors-2.0.0.tgz",
+@@ -12504,6 +12605,11 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/iobuffer": {
++      "version": "5.4.0",
++      "resolved": "https://registry.npmjs.org/iobuffer/-/iobuffer-5.4.0.tgz",
++      "integrity": "sha512-DRebOWuqDvxunfkNJAlc3IzWIPD5xVxwUNbHr7xKB8E6aLJxIPfNX3CoMJghcFjpv6RWQsrcJbghtEwSPoJqMA=="
++    },
+     "node_modules/ipaddr.js": {
+       "version": "1.9.1",
+       "resolved": "https://registry.npmjs.org/ipaddr.js/-/ipaddr.js-1.9.1.tgz",
+@@ -13203,6 +13309,22 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/jspdf": {
++      "version": "4.2.1",
++      "resolved": "https://registry.npmjs.org/jspdf/-/jspdf-4.2.1.tgz",
++      "integrity": "sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==",
++      "dependencies": {
++        "@babel/runtime": "^7.28.6",
++        "fast-png": "^6.2.0",
++        "fflate": "^0.8.1"
++      },
++      "optionalDependencies": {
++        "canvg": "^3.0.11",
++        "core-js": "^3.6.0",
++        "dompurify": "^3.3.1",
++        "html2canvas": "^1.0.0-rc.5"
++      }
++    },
+     "node_modules/jsx-ast-utils": {
+       "version": "3.3.5",
+       "resolved": "https://registry.npmjs.org/jsx-ast-utils/-/jsx-ast-utils-3.3.5.tgz",
+@@ -14153,6 +14275,11 @@
+       "integrity": "sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==",
+       "dev": true
+     },
++    "node_modules/pako": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/pako/-/pako-2.1.0.tgz",
++      "integrity": "sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug=="
++    },
+     "node_modules/parent-module": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/parent-module/-/parent-module-1.0.1.tgz",
+@@ -14297,6 +14424,12 @@
+       "integrity": "sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==",
+       "dev": true
+     },
++    "node_modules/performance-now": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/performance-now/-/performance-now-2.1.0.tgz",
++      "integrity": "sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==",
++      "optional": true
++    },
+     "node_modules/pg-int8": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz",
+@@ -14741,6 +14874,15 @@
+         }
+       ]
+     },
++    "node_modules/raf": {
++      "version": "3.4.1",
++      "resolved": "https://registry.npmjs.org/raf/-/raf-3.4.1.tgz",
++      "integrity": "sha512-Sq4CW4QhwOHE8ucn6J34MqtZCeWFP2aQSmrlroYgqAV1PjStIhJXxYuTgUIfkEk7zTLjmIjLmU5q+fbD1NnOJA==",
++      "optional": true,
++      "dependencies": {
++        "performance-now": "^2.1.0"
++      }
++    },
+     "node_modules/range-parser": {
+       "version": "1.2.1",
+       "resolved": "https://registry.npmjs.org/range-parser/-/range-parser-1.2.1.tgz",
+@@ -15000,6 +15142,12 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/regenerator-runtime": {
++      "version": "0.13.11",
++      "resolved": "https://registry.npmjs.org/regenerator-runtime/-/regenerator-runtime-0.13.11.tgz",
++      "integrity": "sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==",
++      "optional": true
++    },
+     "node_modules/regexp.prototype.flags": {
+       "version": "1.5.4",
+       "resolved": "https://registry.npmjs.org/regexp.prototype.flags/-/regexp.prototype.flags-1.5.4.tgz",
+@@ -15158,6 +15306,15 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/rgbcolor": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/rgbcolor/-/rgbcolor-1.0.1.tgz",
++      "integrity": "sha512-9aZLIrhRaD97sgVhtJOW6ckOEh6/GnvQtdVNfdZ6s67+3/XwLS9lBcQYzEEhYVeUowN7pRzMLsyGhK2i/xvWbw==",
++      "optional": true,
++      "engines": {
++        "node": ">= 0.8.15"
++      }
++    },
+     "node_modules/router": {
+       "version": "2.2.0",
+       "resolved": "https://registry.npmjs.org/router/-/router-2.2.0.tgz",
+@@ -15670,6 +15827,15 @@
+         "node": "*"
+       }
+     },
++    "node_modules/stackblur-canvas": {
++      "version": "2.7.0",
++      "resolved": "https://registry.npmjs.org/stackblur-canvas/-/stackblur-canvas-2.7.0.tgz",
++      "integrity": "sha512-yf7OENo23AGJhBriGx0QivY5JP6Y1HbrrDI6WLt6C5auYZXlQrheoY8hD4ibekFKz1HOfE48Ww8kMWMnJD/zcQ==",
++      "optional": true,
++      "engines": {
++        "node": ">=0.1.14"
++      }
++    },
+     "node_modules/statuses": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/statuses/-/statuses-2.0.1.tgz",
+@@ -16031,6 +16197,15 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/svg-pathdata": {
++      "version": "6.0.3",
++      "resolved": "https://registry.npmjs.org/svg-pathdata/-/svg-pathdata-6.0.3.tgz",
++      "integrity": "sha512-qsjeeq5YjBZ5eMdFuUa4ZosMLxgr5RZ+F+Y1OrDhuOCEInRMA3x74XdBtggJcj9kOeInz0WE+LgCPDkZFlBYJw==",
++      "optional": true,
++      "engines": {
++        "node": ">=12.0.0"
++      }
++    },
+     "node_modules/tailwind-merge": {
+       "version": "3.0.1",
+       "resolved": "https://registry.npmjs.org/tailwind-merge/-/tailwind-merge-3.0.1.tgz",
+@@ -16209,6 +16384,14 @@
+       "devOptional": true,
+       "license": "MIT"
+     },
++    "node_modules/text-segmentation": {
++      "version": "1.0.3",
++      "resolved": "https://registry.npmjs.org/text-segmentation/-/text-segmentation-1.0.3.tgz",
++      "integrity": "sha512-iOiPUo/BGnZ6+54OsWxZidGCsdU8YbE4PSpdPinp7DeMtUJNJBoJ/ouUSTJjHkh1KntHaltHl/gDs2FC4i5+Nw==",
++      "dependencies": {
++        "utrie": "^1.0.2"
++      }
++    },
+     "node_modules/thenify": {
+       "version": "3.3.1",
+       "resolved": "https://registry.npmjs.org/thenify/-/thenify-3.3.1.tgz",
+@@ -16758,6 +16941,14 @@
+         "node": ">= 0.4.0"
+       }
+     },
++    "node_modules/utrie": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/utrie/-/utrie-1.0.2.tgz",
++      "integrity": "sha512-1MLa5ouZiOmQzUbjbu9VmjLzn1QLXBhwpUa7kdLUQK+KQ5KA9I1vk5U4YHe/X2Ch7PYnJfWuWT+VbuxbGwljhw==",
++      "dependencies": {
++        "base64-arraybuffer": "^1.0.2"
++      }
++    },
+     "node_modules/uuid": {
+       "version": "10.0.0",
+       "resolved": "https://registry.npmjs.org/uuid/-/uuid-10.0.0.tgz",
+diff --git a/package.json b/package.json
+index 04e82a2..b5cc06a 100644
+--- a/package.json
++++ b/package.json
+@@ -43,6 +43,8 @@
+     "embla-carousel-react": "^8.6.0",
+     "firebase": "^11.9.1",
+     "genkit": "^1.20.0",
++    "html2canvas": "^1.4.1",
++    "jspdf": "^4.2.1",
+     "lucide-react": "^0.475.0",
+     "next": "^15.5.7",
+     "patch-package": "^8.0.0",
+diff --git a/src/components/loan-detail-view-new.tsx b/src/components/loan-detail-view-new.tsx
+index 34e0e1e..041d5b8 100644
+--- a/src/components/loan-detail-view-new.tsx
++++ b/src/components/loan-detail-view-new.tsx
+@@ -14,6 +14,7 @@ import {
+   DollarSign,
+   Banknote,
+   ClipboardCheck,
++  Printer,
+ } from 'lucide-react';
+ import { useRouter } from 'next/navigation';
+ import { addMonths, format } from 'date-fns';
+@@ -70,6 +71,7 @@ import { ExistingLoansCheck } from './existing-loans-check';
+ import { LoanComputationDialog } from './loan-computation-dialog';
+ import { CollectionSchedule } from './collection-schedule';
+ import { useApprovalPanel } from './approval-context';
++import { PrintableLoanForm } from './printable-loan-form';
+ 
+ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
+   if (!releasedAt || loan.paymentTerm <= 0) return [];
+@@ -238,12 +240,14 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+   }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
+ 
+   const [isSubmitting, setIsSubmitting] = React.useState(false);
++  const [isPrinting, setIsPrinting] = React.useState(false);
+   const [isSheetOpen, setSheetOpen] = React.useState(false);
+   const [isDenyDialogOpen, setDenyDialogOpen] = React.useState(false);
+   const [isDeleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+   const [isComputationDialogOpen, setComputationDialogOpen] =
+     React.useState(false);
+   const [denialRemarks, setDenialRemarks] = React.useState('');
++  const printRef = React.useRef<HTMLDivElement>(null!);
+ 
+   const handleUpdate = async (data: Partial<LoanWrite>) => {
+     if (!loanRef) return;
+@@ -397,6 +401,31 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+     }
+   };
+ 
++  const handlePrint = async () => {
++    if (!printRef.current || !loan) return;
++    setIsPrinting(true);
++    try {
++      const html2canvas = (await import('html2canvas')).default;
++      const jsPDF = (await import('jspdf')).default;
++      const canvas = await html2canvas(printRef.current, {
++        scale: 2,
++        useCORS: true,
++        backgroundColor: '#ffffff',
++      });
++      const imgData = canvas.toDataURL('image/png');
++      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
++      const pdfWidth = pdf.internal.pageSize.getWidth();
++      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
++      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
++      pdf.save(`Loan-Application-${loan.applicantName}-#${loan.loanNumber}.pdf`);
++    } catch (error) {
++      console.error('Error generating PDF:', error);
++      toast({ variant: 'destructive', title: 'Print Failed', description: 'Could not generate PDF. Please try again.' });
++    } finally {
++      setIsPrinting(false);
++    }
++  };
++
+   const handleApproveClick = () => {
+     if (!loan?.bookkeeperChecked) {
+       setRequirementMessage('Bookkeeper must verify the loan before approval.');
+@@ -796,9 +825,21 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+             Loan #{loan.loanNumber}
+           </p>
+         </div>
+-        <div className="text-right">
+-          <p className="text-sm text-muted-foreground">Current Status</p>
+-          <StatusBadge status={loan.status} />
++        <div className="flex items-center gap-3">
++          <Button
++            variant="outline"
++            size="sm"
++            onClick={handlePrint}
++            disabled={isPrinting}
++            className="flex items-center gap-2 border-blue-300 text-blue-600 hover:bg-blue-50"
++          >
++            <Printer className="h-4 w-4" />
++            {isPrinting ? 'Generating...' : 'Print'}
++          </Button>
++          <div className="text-right">
++            <p className="text-sm text-muted-foreground">Current Status</p>
++            <StatusBadge status={loan.status} />
++          </div>
+         </div>
+       </div>
+ 
+@@ -946,6 +987,9 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+           userRole={userRole}
+         />
+       )}
++
++      {/* Hidden printable form rendered off-screen for PDF capture */}
++      {loan && <PrintableLoanForm loan={loan} formRef={printRef} />}
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/components/loan-detail-view.tsx b/src/components/loan-detail-view.tsx
+index 9f06b15..8460f85 100644
+--- a/src/components/loan-detail-view.tsx
++++ b/src/components/loan-detail-view.tsx
+@@ -14,6 +14,7 @@ import {
+   DollarSign,
+   Banknote,
+   ClipboardCheck,
++  Printer,
+ } from 'lucide-react';
+ import { useRouter } from 'next/navigation';
+ import { addMonths, format } from 'date-fns';
+@@ -67,6 +68,7 @@ import { ExistingLoansCheck } from './existing-loans-check';
+ import { LoanComputationDialog } from './loan-computation-dialog';
+ import { CollectionSchedule } from './collection-schedule';
+ import { useApprovalPanel } from './approval-context';
++import { PrintableLoanForm } from './printable-loan-form';
+ 
+ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] => {
+   if (!releasedAt || loan.paymentTerm <= 0) return [];
+@@ -200,12 +202,14 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+   }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
+ 
+   const [isSubmitting, setIsSubmitting] = React.useState(false);
++  const [isPrinting, setIsPrinting] = React.useState(false);
+   const [isSheetOpen, setSheetOpen] = React.useState(false);
+   const [isDenyDialogOpen, setDenyDialogOpen] = React.useState(false);
+   const [isDeleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+   const [isComputationDialogOpen, setComputationDialogOpen] =
+     React.useState(false);
+   const [denialRemarks, setDenialRemarks] = React.useState('');
++  const printRef = React.useRef<HTMLDivElement>(null!);
+ 
+   const handleUpdate = async (data: Partial<LoanWrite>) => {
+     if (!loanRef) return;
+@@ -235,6 +239,33 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+     }
+   };
+ 
++  const handlePrint = async () => {
++    if (!printRef.current || !loan) return;
++    setIsPrinting(true);
++    try {
++      const html2canvas = (await import('html2canvas')).default;
++      const jsPDF = (await import('jspdf')).default;
++
++      const canvas = await html2canvas(printRef.current, {
++        scale: 2,
++        useCORS: true,
++        backgroundColor: '#ffffff',
++      });
++
++      const imgData = canvas.toDataURL('image/png');
++      const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
++      const pdfWidth = pdf.internal.pageSize.getWidth();
++      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
++      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
++      pdf.save(`Loan-Application-${loan.applicantName}-#${loan.loanNumber}.pdf`);
++    } catch (error) {
++      console.error('Error generating PDF:', error);
++      toast({ variant: 'destructive', title: 'Print Failed', description: 'Could not generate PDF. Please try again.' });
++    } finally {
++      setIsPrinting(false);
++    }
++  };
++
+   const handleRelease = async () => {
+     if (!firestore || !loan || !loanRef) return;
+     setIsSubmitting(true);
+@@ -455,9 +486,21 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+             Loan #{loan.loanNumber}
+           </p>
+         </div>
+-        <div className="text-right">
+-          <p className="text-sm text-muted-foreground">Current Status</p>
+-          <StatusBadge status={loan.status} />
++        <div className="flex items-center gap-3">
++          <Button
++            variant="outline"
++            size="sm"
++            onClick={handlePrint}
++            disabled={isPrinting}
++            className="flex items-center gap-2 border-blue-300 text-blue-600 hover:bg-blue-50"
++          >
++            <Printer className="h-4 w-4" />
++            {isPrinting ? 'Generating...' : 'Print'}
++          </Button>
++          <div className="text-right">
++            <p className="text-sm text-muted-foreground">Current Status</p>
++            <StatusBadge status={loan.status} />
++          </div>
+         </div>
+       </div>
+ 
+@@ -779,6 +822,9 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
+         loan={loanSerializable}
+       />
+ 
++      {/* Hidden printable form - rendered off-screen for PDF capture */}
++      <PrintableLoanForm loan={loan} formRef={printRef} />
++
+       <AlertDialog open={requirementDialogOpen} onOpenChange={setRequirementDialogOpen}>
+         <AlertDialogContent>
+           <AlertDialogHeader>
+diff --git a/src/components/loan-form-sheet.tsx b/src/components/loan-form-sheet.tsx
+index 5598616..25fc2e5 100644
+--- a/src/components/loan-form-sheet.tsx
++++ b/src/components/loan-form-sheet.tsx
+@@ -63,6 +63,9 @@ const loanFormSchema = z.object({
+   applicantName: z.string().min(2, {
+     message: "Applicant name must be at least 2 characters.",
+   }),
++  membershipType: z.enum(["In-Service Member", "Separated from Service Member"], {
++    required_error: "Please select a membership type.",
++  }),
+   amount: z.union([z.string(), z.number()])
+     .transform((val) => Number(val))
+     .refine((val) => !isNaN(val) && val > 0, {
+@@ -116,6 +119,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps)
+     defaultValues: isEditMode
+       ? {
+           applicantName: loan.applicantName,
++          membershipType: (loan.membershipType as "In-Service Member" | "Separated from Service Member") || "In-Service Member",
+           amount: loan.amount,
+           paymentTerm: loan.paymentTerm,
+           loanType: loan.loanType,
+@@ -126,6 +130,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps)
+         }
+       : {
+           applicantName: "",
++          membershipType: "In-Service Member",
+           amount: 0,
+           paymentTerm: 6,
+           loanType: "",
+@@ -410,6 +415,28 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps)
+                         )}
+                       />
+ 
++                      <FormField
++                        control={form.control}
++                        name="membershipType"
++                        render={({ field }) => (
++                          <FormItem>
++                            <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Type of Membership</FormLabel>
++                            <Select onValueChange={field.onChange} value={field.value}>
++                              <FormControl>
++                                <SelectTrigger className="h-14 text-lg border-[#E2E8F0] shadow-none">
++                                  <SelectValue placeholder="Select membership type" />
++                                </SelectTrigger>
++                              </FormControl>
++                              <SelectContent>
++                                <SelectItem value="In-Service Member">In-Service Member</SelectItem>
++                                <SelectItem value="Separated from Service Member">Separated from Service Member</SelectItem>
++                              </SelectContent>
++                            </Select>
++                            <FormMessage />
++                          </FormItem>
++                        )}
++                      />
++
+                       <div className="bg-[#FAFAFA]/50 border border-[#E2E8F0] rounded-2xl p-6 space-y-4">
+                         <FormField
+                           control={form.control}
+@@ -693,7 +720,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps)
+ 
+                         // Validate current step before proceeding
+                         let fieldsToValidate: any = [];
+-                        if (currentStep === 1) fieldsToValidate = ['applicantName', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
++                        if (currentStep === 1) fieldsToValidate = ['applicantName', 'membershipType', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
+                         if (currentStep === 2) fieldsToValidate = ['amount', 'paymentTerm'];
+                         
+                         try {
+diff --git a/src/components/printable-loan-form.tsx b/src/components/printable-loan-form.tsx
+new file mode 100644
+index 0000000..de83aae
+--- /dev/null
++++ b/src/components/printable-loan-form.tsx
+@@ -0,0 +1,408 @@
++'use client';
++
++import * as React from 'react';
++import type { Loan } from '@/lib/types';
++import { numberToWords } from '@/lib/number-to-words';
++
++interface PrintableLoanFormProps {
++  loan: Loan;
++  formRef: React.RefObject<HTMLDivElement>;
++}
++
++const formatCurrency = (value: number) => {
++  if (isNaN(value) || value === undefined) return '0.00';
++  return new Intl.NumberFormat('en-PH', {
++    minimumFractionDigits: 2,
++    maximumFractionDigits: 2,
++  }).format(value);
++};
++
++function computeLoanDetails(loan: Loan) {
++  const principal = loan.amount;
++  const term = loan.paymentTerm;
++  const interestRate = 0.015;
++
++  let beginningBalance = principal;
++  let totalInterest = 0;
++  const approxMonthlyPrincipal = principal / term;
++  let totalPrincipalPaid = 0;
++  const schedule = [];
++
++  for (let month = 1; month <= term; month++) {
++    const interest = beginningBalance * interestRate;
++    totalInterest += interest;
++    let principalPayment = 0;
++    let totalMonthlyPayment = 0;
++
++    if (month === term) {
++      principalPayment = principal - totalPrincipalPaid;
++      totalMonthlyPayment = principalPayment + interest;
++    } else {
++      const exactTotal = approxMonthlyPrincipal + interest;
++      totalMonthlyPayment = Math.round(exactTotal);
++      principalPayment = totalMonthlyPayment - interest;
++    }
++    const endingBalance = beginningBalance - principalPayment;
++    schedule.push({ month, beginningBalance, interest, principal: principalPayment, endingBalance: endingBalance < 0 ? 0 : endingBalance });
++    beginningBalance = endingBalance;
++    totalPrincipalPaid += principalPayment;
++  }
++
++  const monthlyAmortization = Math.round(schedule[0]?.principal * 100) / 100 || 0;
++  const loanTermInYears = term / 12;
++  const serviceCharge = principal * 0.06 * loanTermInYears;
++  const shareCapital = principal * 0.01;
++  const firstMonthInterest = schedule[0]?.interest || 0;
++  const firstMonthAmortization = term === 1 ? 0 : monthlyAmortization;
++  const outstandingBalance = loan.outstandingBalanceAtRenewal || 0;
++  const totalDeductions = serviceCharge + shareCapital + firstMonthAmortization + firstMonthInterest + outstandingBalance;
++  const netProceeds = principal - totalDeductions;
++
++  return { monthlyAmortization, serviceCharge, shareCapital, firstMonthInterest, firstMonthAmortization, totalDeductions, netProceeds, outstandingBalance, totalInterest };
++}
++
++export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
++  const computation = computeLoanDetails(loan);
++  const isRenewal = !!loan.renewalOf;
++  const isEmergency = loan.loanType?.toLowerCase().includes('emergency');
++  const isInService = loan.membershipType === 'In-Service Member';
++  const isSeparated = loan.membershipType === 'Separated from Service Member';
++
++  const createdDate = loan.createdAt instanceof Date
++    ? loan.createdAt.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
++    : new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
++
++  const amountInWords = numberToWords(loan.amount);
++
++  const cellStyle: React.CSSProperties = {
++    border: '1px solid #000',
++    padding: '4px 6px',
++    fontSize: '9px',
++    verticalAlign: 'top',
++  };
++
++  const labelStyle: React.CSSProperties = {
++    fontSize: '8px',
++    fontWeight: 'bold',
++    marginBottom: '2px',
++    display: 'block',
++  };
++
++  const lineStyle: React.CSSProperties = {
++    borderBottom: '1px solid #000',
++    minHeight: '14px',
++    marginTop: '2px',
++    marginBottom: '6px',
++    display: 'block',
++    fontSize: '9px',
++  };
++
++  const checkboxStyle: React.CSSProperties = {
++    display: 'inline-block',
++    width: '10px',
++    height: '10px',
++    border: '1px solid #000',
++    marginRight: '4px',
++    textAlign: 'center',
++    lineHeight: '10px',
++    fontSize: '8px',
++    verticalAlign: 'middle',
++  };
++
++  return (
++    <div
++      ref={formRef}
++      style={{
++        width: '816px', // A4 at 96dpi
++        minHeight: '1056px',
++        backgroundColor: '#fff',
++        padding: '32px 40px',
++        fontFamily: 'Arial, sans-serif',
++        color: '#000',
++        fontSize: '9px',
++        position: 'absolute',
++        top: '-9999px',
++        left: '-9999px',
++        zIndex: -1,
++      }}
++    >
++      {/* HEADER */}
++      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
++        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
++          {/* eslint-disable-next-line @next/next/no-img-element */}
++          <img src="/armmc-logo.jpg" alt="ARMMC Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
++          <div>
++            <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.4' }}>Amang Rodriguez Memorial Medical Center</div>
++            <div style={{ fontSize: '9px' }}>Multi-Purpose Cooperative</div>
++            <div style={{ fontSize: '9px' }}>Marikina City</div>
++          </div>
++        </div>
++        <div style={{ border: '1px solid #000', padding: '6px 10px', fontSize: '9px', minWidth: '150px' }}>
++          <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
++            <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Application #:</span>
++            <span style={{ borderBottom: '1px solid #000', flex: 1 }}>{loan.loanNumber}</span>
++          </div>
++          <div style={{ display: 'flex', gap: '8px' }}>
++            <span style={{ fontWeight: 'bold' }}>Date:</span>
++            <span style={{ borderBottom: '1px solid #000', flex: 1 }}>{createdDate}</span>
++          </div>
++        </div>
++      </div>
++
++      {/* TITLE */}
++      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '12px', textDecoration: 'underline', marginBottom: '10px' }}>
++        LOAN APPLICATION FORM
++      </div>
++
++      {/* NAME LINE */}
++      <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', marginBottom: '6px' }}>
++        <span style={{ fontWeight: 'bold', fontSize: '9px', whiteSpace: 'nowrap' }}>Name:</span>
++        <span style={{ borderBottom: '1px solid #000', flex: 1, minHeight: '14px', fontSize: '10px', fontWeight: 'bold', paddingBottom: '1px' }}>{loan.applicantName}</span>
++      </div>
++
++      {/* MEMBERSHIP TYPE */}
++      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
++        <span style={{ fontWeight: 'bold', fontSize: '9px' }}>Type of Membership</span>
++        <span>
++          <span style={{ ...checkboxStyle }}>{isInService ? 'Γ£ô' : ''}</span>
++          <span style={{ fontSize: '9px' }}>In-Service Member</span>
++        </span>
++        <span>
++          <span style={{ ...checkboxStyle }}>{isSeparated ? 'Γ£ô' : ''}</span>
++          <span style={{ fontSize: '9px' }}>Separated from Service Member</span>
++        </span>
++      </div>
++
++      {/* PURPOSE */}
++      <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', marginBottom: '6px' }}>
++        <span style={{ fontWeight: 'bold', fontSize: '9px', whiteSpace: 'nowrap' }}>Purpose of Loan:</span>
++        <span style={{ borderBottom: '1px solid #000', flex: 1, minHeight: '14px', fontSize: '9px', paddingBottom: '1px' }}>{loan.purpose}</span>
++      </div>
++
++      {/* AMOUNT IN WORDS */}
++      <div style={{ marginBottom: '6px', fontSize: '9px' }}>
++        <div>*I hereby apply for the loan of (amount in words):</div>
++        <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', marginTop: '2px' }}>
++          <span style={{ whiteSpace: 'nowrap' }}>( Php</span>
++          <span style={{ borderBottom: '1px solid #000', flex: 1, fontSize: '9px' }}>{formatCurrency(loan.amount)}</span>
++          <span>)</span>
++          <span style={{ borderBottom: '1px solid #000', flex: 2, fontSize: '9px' }}>{amountInWords}</span>
++        </div>
++      </div>
++
++      {/* MONTHLY AMORTIZATION ROW */}
++      <div style={{ display: 'flex', gap: '16px', marginBottom: '6px', fontSize: '9px', alignItems: 'flex-end' }}>
++        <span style={{ whiteSpace: 'nowrap' }}>Monthly Amortization: Amount Php</span>
++        <span style={{ borderBottom: '1px solid #000', width: '90px' }}>{formatCurrency(computation.monthlyAmortization)}</span>
++        <span style={{ whiteSpace: 'nowrap' }}>Pesos</span>
++        <span style={{ whiteSpace: 'nowrap' }}>Terms:</span>
++        <span style={{ borderBottom: '1px solid #000', width: '50px' }}>{loan.paymentTerm}</span>
++        <span>month/s</span>
++      </div>
++
++      {/* TYPE OF LOAN BOX */}
++      <div style={{ border: '1px solid #000', padding: '6px', marginBottom: '8px', fontSize: '9px' }}>
++        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
++          <div>
++            <span style={{ fontWeight: 'bold' }}>TYPE OF LOAN:</span>
++          </div>
++          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 20px' }}>
++            <div style={{ display: 'flex', alignItems: 'center' }}>
++              <span style={{ ...checkboxStyle }}>{!isEmergency ? 'Γ£ô' : ''}</span>
++              <span>Regular Loan</span>
++            </div>
++            <div>
++              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
++                <span>
++                  <span style={{ ...checkboxStyle }}>{!isRenewal ? 'Γ£ô' : ''}</span>
++                  <span>New</span>
++                </span>
++                <span>
++                  <span style={{ ...checkboxStyle }}>{isRenewal && !isEmergency ? 'Γ£ô' : ''}</span>
++                  <span>Renewal</span>
++                </span>
++              </div>
++            </div>
++            <div style={{ display: 'flex', alignItems: 'center' }}>
++              <span style={{ ...checkboxStyle }}>{isEmergency ? 'Γ£ô' : ''}</span>
++              <span>Emergency Loan</span>
++            </div>
++            <div>
++              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
++                <span>
++                  <span style={{ ...checkboxStyle }}>{!isRenewal ? 'Γ£ô' : ''}</span>
++                  <span>New</span>
++                </span>
++                <span>
++                  <span style={{ ...checkboxStyle }}>{isRenewal && isEmergency ? 'Γ£ô' : ''}</span>
++                  <span>Renewal</span>
++                </span>
++              </div>
++            </div>
++            <div style={{ display: 'flex', alignItems: 'center' }}>
++              <span style={{ ...checkboxStyle }}></span>
++              <span>Others, please specify:</span>
++              <span style={{ borderBottom: '1px solid #000', flex: 1, marginLeft: '4px' }}></span>
++            </div>
++            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
++              <span><span style={{ ...checkboxStyle }}></span>Clothing</span>
++              <span><span style={{ ...checkboxStyle }}></span>Mid-year Bonus</span>
++              <span><span style={{ ...checkboxStyle }}></span>Year-end Bonus</span>
++            </div>
++          </div>
++        </div>
++      </div>
++
++      {/* BORROWER / CO-MAKER / CERTIFIED BY TABLE */}
++      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '9px' }}>
++        <tbody>
++          <tr>
++            <td style={{ ...cellStyle, width: '33%', fontWeight: 'bold' }}>BORROWER</td>
++            <td style={{ ...cellStyle, width: '33%', fontWeight: 'bold' }}>CO-MAKER</td>
++            <td style={{ ...cellStyle, width: '34%', fontWeight: 'bold' }}>CERTIFIED BY:</td>
++          </tr>
++          <tr>
++            <td style={cellStyle}>
++              <span style={labelStyle}>Basic Salary:</span>
++              <span style={lineStyle}></span>
++              <span style={labelStyle}>Monthly Net Take Home Pay:</span>
++              <span style={lineStyle}></span>
++              <span style={labelStyle}>Share Capital:</span>
++              <span style={{ ...lineStyle, paddingBottom: '16px' }}>{formatCurrency(computation.shareCapital)}</span>
++            </td>
++            <td style={cellStyle}>
++              <span style={labelStyle}>Basic Salary:</span>
++              <span style={lineStyle}></span>
++              <span style={labelStyle}>Monthly Net Take Home Pay:</span>
++              <span style={lineStyle}></span>
++              <span style={labelStyle}>Share Capital:</span>
++              <span style={{ ...lineStyle, paddingBottom: '16px' }}></span>
++            </td>
++            <td style={cellStyle}>
++              <div style={{ marginBottom: '8px' }}>
++                <span style={labelStyle}>Payroll Officer of ARMMC:</span>
++                <span style={lineStyle}></span>
++                <span style={{ fontSize: '7px', display: 'block', textAlign: 'center', marginTop: '-4px' }}>Signature over Printed Name</span>
++              </div>
++              <div>
++                <span style={labelStyle}>Recommending approval:</span>
++              </div>
++              <div style={{ marginBottom: '2px' }}>
++                <span style={labelStyle}>Bookkeeper of ARMMC MPC:</span>
++                <span style={lineStyle}></span>
++                <span style={{ fontSize: '7px', display: 'block', textAlign: 'center', marginTop: '-4px' }}>Signature over Printed Name</span>
++              </div>
++            </td>
++          </tr>
++          <tr>
++            <td style={cellStyle}>
++              <span style={labelStyle}>Loan Balance (if any)</span>
++              <span style={labelStyle}>Regular: <span style={lineStyle}></span></span>
++              <span style={labelStyle}>Emergency: <span style={lineStyle}></span></span>
++              <span style={labelStyle}>Others: <span style={lineStyle}></span></span>
++              <span style={labelStyle}>Total: <span style={lineStyle}></span></span>
++            </td>
++            <td style={cellStyle}>
++              <span style={labelStyle}>Loan Balance (if any)</span>
++              <span style={labelStyle}>Regular: <span style={lineStyle}></span></span>
++              <span style={labelStyle}>Emergency: <span style={lineStyle}></span></span>
++              <span style={labelStyle}>Others: <span style={lineStyle}></span></span>
++              <span style={labelStyle}>Total: <span style={lineStyle}></span></span>
++            </td>
++            <td style={cellStyle}>
++              {/* empty */}
++            </td>
++          </tr>
++        </tbody>
++      </table>
++
++      {/* CREDIT COMMITTEE RECOMMENDATION */}
++      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', fontSize: '9px', flexWrap: 'wrap' }}>
++        <span style={{ fontWeight: 'bold' }}>Credit Committee Recommendation:</span>
++        <span><span style={{ ...checkboxStyle }}></span> Approved</span>
++        <span><span style={{ ...checkboxStyle }}></span> Disapproved, reason for Disapproval:</span>
++        <span style={{ borderBottom: '1px solid #000', flex: 1, minWidth: '80px' }}></span>
++      </div>
++
++      {/* CREDIT COMMITTEE SIGNATURES TABLE */}
++      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px', fontSize: '9px' }}>
++        <tbody>
++          <tr>
++            <td style={{ ...cellStyle, width: '33%' }}>Credit Committee Member</td>
++            <td style={{ ...cellStyle, width: '33%' }}>Credit Committee (Chairperson / Vice-Chair)</td>
++            <td style={{ ...cellStyle, width: '34%' }}>Noted by: (ARMMC MPC BOD Chairperson)</td>
++          </tr>
++          <tr>
++            <td style={{ ...cellStyle, height: '40px' }}></td>
++            <td style={cellStyle}></td>
++            <td style={cellStyle}></td>
++          </tr>
++          <tr>
++            <td style={{ ...cellStyle, fontSize: '7px', textAlign: 'center' }}>Signature over Printed Name</td>
++            <td style={{ ...cellStyle, fontSize: '7px', textAlign: 'center' }}>Signature over Printed Name</td>
++            <td style={{ ...cellStyle, fontSize: '7px', textAlign: 'center' }}>Signature over Printed Name</td>
++          </tr>
++        </tbody>
++      </table>
++
++      {/* LOAN AGREEMENT */}
++      <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11px', textDecoration: 'underline', marginBottom: '6px' }}>
++        LOAN AGREEMENT
++      </div>
++      <p style={{ fontSize: '8.5px', textAlign: 'justify', marginBottom: '14px', lineHeight: '1.5' }}>
++        I / We hereby promise to pay ARMMC-MPC the above stated loan granted to me thru salary deduction (In-Service Member) / Over the Counter (Separated from Service) on the specified due date according to the terms and conditions set forth by the Credit Committee. Failure to comply with the said terms and conditions, I/We am/are willing to deduct any unpaid remaining balance from my share capital.
++      </p>
++
++      {/* SIGNATURE LINES */}
++      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '9px' }}>
++        <div style={{ textAlign: 'center', width: '40%' }}>
++          <div style={{ borderBottom: '1px solid #000', marginBottom: '4px', minHeight: '30px' }}></div>
++          <div style={{ fontWeight: 'bold' }}>BORROWER</div>
++          <div style={{ fontSize: '7.5px' }}>(Signature over printed name)</div>
++        </div>
++        <div style={{ textAlign: 'center', width: '40%' }}>
++          <div style={{ borderBottom: '1px solid #000', marginBottom: '4px', minHeight: '30px' }}></div>
++          <div style={{ fontWeight: 'bold' }}>CO-MAKER</div>
++          <div style={{ fontSize: '7.5px' }}>(Signature over printed name)</div>
++        </div>
++      </div>
++
++      {/* SAMPLE LOAN COMPUTATION TABLE */}
++      <div style={{ fontWeight: 'bold', fontSize: '10px', textAlign: 'center', textDecoration: 'underline', marginBottom: '6px' }}>
++        SAMPLE LOAN COMPUTATION
++      </div>
++      <div style={{ fontSize: '9px', fontWeight: 'bold', marginBottom: '4px' }}>
++        {isEmergency ? 'EMERGENCY LOAN' : 'REGULAR LOAN'}
++      </div>
++      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
++        <thead>
++          <tr>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>PRINCIPAL AMOUNT</th>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>TERM OF LOAN</th>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>INTEREST (1.5% diminishing per month)</th>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>SERVICE CHARGE (6% per year)</th>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>SHARE CAPITAL (1% retain)</th>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>MONTHLY AMORTIZATION</th>
++            <th style={{ ...cellStyle, textAlign: 'center', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>NET PROCEEDS</th>
++          </tr>
++        </thead>
++        <tbody>
++          <tr>
++            <td style={{ ...cellStyle, textAlign: 'center' }}>{formatCurrency(loan.amount)}</td>
++            <td style={{ ...cellStyle, textAlign: 'center' }}>{loan.paymentTerm} Months</td>
++            <td style={{ ...cellStyle, textAlign: 'center' }}>{formatCurrency(computation.totalInterest)}</td>
++            <td style={{ ...cellStyle, textAlign: 'center' }}>{formatCurrency(computation.serviceCharge)}</td>
++            <td style={{ ...cellStyle, textAlign: 'center' }}>{formatCurrency(computation.shareCapital)}</td>
++            <td style={{ ...cellStyle, textAlign: 'center' }}>{formatCurrency(computation.monthlyAmortization)}</td>
++            <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 'bold' }}>{formatCurrency(computation.netProceeds)}</td>
++          </tr>
++        </tbody>
++      </table>
++
++      {/* FOOTER */}
++      <div style={{ marginTop: '16px', fontSize: '8px', color: '#555' }}>
++        /creditCommittee2024
++      </div>
++    </div>
++  );
++}
+diff --git a/src/lib/number-to-words.ts b/src/lib/number-to-words.ts
+new file mode 100644
+index 0000000..30026ed
+--- /dev/null
++++ b/src/lib/number-to-words.ts
+@@ -0,0 +1,46 @@
++const ones = [
++  '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
++  'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
++  'Seventeen', 'Eighteen', 'Nineteen',
++];
++const tens = [
++  '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety',
++];
++
++function convertHundreds(n: number): string {
++  if (n === 0) return '';
++  if (n < 20) return ones[n];
++  if (n < 100) {
++    return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
++  }
++  return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + convertHundreds(n % 100) : '');
++}
++
++export function numberToWords(amount: number): string {
++  if (isNaN(amount) || amount < 0) return 'Zero Pesos Only';
++
++  const integerPart = Math.floor(amount);
++  const decimalPart = Math.round((amount - integerPart) * 100);
++
++  if (integerPart === 0 && decimalPart === 0) return 'Zero Pesos Only';
++
++  let result = '';
++
++  if (integerPart >= 1_000_000) {
++    result += convertHundreds(Math.floor(integerPart / 1_000_000)) + ' Million ';
++  }
++  if (integerPart >= 1_000) {
++    result += convertHundreds(Math.floor((integerPart % 1_000_000) / 1_000)) + ' Thousand ';
++  }
++  result += convertHundreds(integerPart % 1_000);
++
++  result = result.trim();
++  result += ' Pesos';
++
++  if (decimalPart > 0) {
++    result += ' and ' + convertHundreds(decimalPart) + '/100';
++  }
++
++  result += ' Only';
++  return result;
++}
+diff --git a/src/lib/types.ts b/src/lib/types.ts
+index af7df1f..c58bcce 100644
+--- a/src/lib/types.ts
++++ b/src/lib/types.ts
+@@ -30,6 +30,7 @@ export interface Loan {
+   renewalOf?: string;
+   netProceeds?: number;
+   outstandingBalanceAtRenewal?: number;
++  membershipType?: 'In-Service Member' | 'Separated from Service Member';
+ }
+ 
+ export type PaymentStatus = 'pending' | 'paid';

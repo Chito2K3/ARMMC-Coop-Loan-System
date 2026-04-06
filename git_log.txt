@@ -1,0 +1,29 @@
+﻿commit 7a731a479dff19263b1aab70d8f0675028e16234
+Author: Chito2K3 <120994847+Chito2K3@users.noreply.github.com>
+Date:   Mon Apr 6 09:41:23 2026 +0800
+
+    feat: implement membership type and print to PDF functionality
+
+commit 82aa7da6c2fd90b8e1a6b8463c70ad797dd9dc7e
+Author: Chito2K3 <120994847+Chito2K3@users.noreply.github.com>
+Date:   Sun Apr 5 10:44:10 2026 +0800
+
+    feat: premium login page redesign with ARMMC branding and dashboard logo update
+
+commit e47717552f3ec5c92ca0eeda55f3bb2d577361fe
+Author: Chito2K3 <120994847+Chito2K3@users.noreply.github.com>
+Date:   Sun Apr 5 10:18:14 2026 +0800
+
+    fix: resolve loan computation display and backend alignment
+
+commit f192606254840f89180dad9d62c274baf9154f67
+Author: Chito2K3 <120994847+Chito2K3@users.noreply.github.com>
+Date:   Thu Mar 26 11:06:22 2026 +0800
+
+    feat: v2.3.0 - Corporate Navy Theme, Premium Buttons, Navigation Sync, Bookkeeper Permissions
+
+commit ec6234777e012e2fbe5751ec0b2e7d9d49dbece7
+Author: Chito2K3 <120994847+Chito2K3@users.noreply.github.com>
+Date:   Mon Mar 16 15:15:41 2026 +0800
+
+    feat: Auto-mark Month 1 as paid on release; fix due date offsets; add outstanding balance deduction in renewal computation; add View Computation for CC approvers; add remarks field to Payment type

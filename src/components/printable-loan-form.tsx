@@ -130,7 +130,7 @@ export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/armmc-logo.jpg" alt="ARMMC Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
+          <img src="/armmc-logo.jpg" crossOrigin="anonymous" alt="ARMMC Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
           <div>
             <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.4' }}>Amang Rodriguez Memorial Medical Center</div>
             <div style={{ fontSize: '9px' }}>Multi-Purpose Cooperative</div>

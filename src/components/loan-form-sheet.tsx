@@ -104,16 +104,6 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
   const [currentStep, setCurrentStep] = React.useState(1);
   const [isProcessingStep, setIsProcessingStep] = React.useState(false);
 
-  React.useEffect(() => {
-    if (open && firestore) {
-      getLoanTypes(firestore).then(setLoanTypes);
-      getLoanPurposes(firestore).then(setLoanPurposes);
-    } else {
-      setCurrentStep(1);
-      setIsProcessingStep(false);
-    }
-  }, [open, firestore]);
-
   const form = useForm<LoanFormValues>({
     resolver: zodResolver(loanFormSchema),
     defaultValues: isEditMode
@@ -148,22 +138,72 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
   const paymentTerm = form.watch("paymentTerm");
 
   React.useEffect(() => {
+    if (open && firestore) {
+      getLoanTypes(firestore).then(setLoanTypes);
+      getLoanPurposes(firestore).then(setLoanPurposes);
+      
+      if (isEditMode && loan) {
+        form.reset({
+          applicantName: loan.applicantName,
+          membershipType: (loan.membershipType as "In-Service Member" | "Separated from Service Member") || "In-Service Member",
+          amount: loan.amount,
+          paymentTerm: loan.paymentTerm,
+          loanType: loan.loanType,
+          purpose: loan.purpose,
+          remarks: loan.remarks || "",
+          isRenewal: !!loan.renewalOf,
+          renewingLoanId: loan.renewalOf || "",
+        });
+      } else {
+        form.reset({
+          applicantName: "",
+          membershipType: "In-Service Member",
+          amount: 0,
+          paymentTerm: 6,
+          loanType: "",
+          purpose: "",
+          remarks: "",
+          isRenewal: false,
+          renewingLoanId: "",
+        });
+      }
+      setCurrentStep(1);
+      setIsProcessingStep(false);
+      setEligibleLoans([]);
+      setSelectedOldLoan(null);
+    } else {
+      setCurrentStep(1);
+      setIsProcessingStep(false);
+    }
+  }, [open, firestore, isEditMode, loan, form]);
+
+  const [allReleasedLoans, setAllReleasedLoans] = React.useState<any[] | null>(null);
+
+  React.useEffect(() => {
+    let mounted = true;
+    if (isRenewal && firestore && open && !allReleasedLoans) {
+      const q = query(collection(firestore, "loans"), where("status", "==", "released"));
+      getDocs(q).then(snap => {
+        if (mounted) setAllReleasedLoans(snap.docs);
+      }).catch(err => console.error("Error fetching released loans:", err));
+    }
+    return () => { mounted = false; };
+  }, [isRenewal, firestore, open, allReleasedLoans]);
+
+  React.useEffect(() => {
     const fetchApplicantLoans = async () => {
-      if (!firestore || !applicantName || applicantName.length < 2 || !isRenewal) {
+      if (!firestore || !applicantName || applicantName.length < 2 || !isRenewal || !allReleasedLoans) {
         setEligibleLoans([]);
         return;
       }
 
-      const q = query(
-        collection(firestore, "loans"),
-        where("applicantName", "==", applicantName)
+      const lowerName = applicantName.toLowerCase();
+      const matchedDocs = allReleasedLoans.filter(
+        doc => (doc.data().applicantName || "").toLowerCase() === lowerName
       );
 
-      const snap = await getDocs(q);
       const loans = await Promise.all(
-        snap.docs
-          .filter(doc => doc.data().status === "released")
-          .map(async (loanDoc) => {
+        matchedDocs.map(async (loanDoc) => {
           const data = loanDoc.data();
           const paymentsSnap = await getDocs(collection(firestore, "loans", loanDoc.id, "payments"));
           const payments = paymentsSnap.docs.map((d) => d.data());
@@ -190,6 +230,17 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
               .reduce((acc, p) => acc + (p.amount || 0), 0) * 100
           ) / 100;
 
+          let currentShortfall = 0;
+          payments.forEach(p => {
+            if (p.status === 'paid' && p.actualAmountPaid !== undefined) {
+              currentShortfall += (p.amount - p.actualAmountPaid);
+            }
+          });
+          const effectiveShortfall = Math.round(Math.max(data.historical_shortfall_bucket || 0, currentShortfall) * 100) / 100;
+          const surcharge = effectiveShortfall * 0.04;
+          const remainingSurcharge = Math.max(0, surcharge - (data.final_surcharge_paid || 0));
+          const outstandingPenalty = Math.round(remainingSurcharge * 100) / 100;
+
           return {
             id: loanDoc.id,
             loanNumber: data.loanNumber,
@@ -198,6 +249,8 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
             isEligible,
             reason,
             unpaidPrincipal,
+            outstandingPenalty,
+            originalAmount: data.amount,
           };
         })
       );
@@ -206,16 +259,22 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     };
 
     fetchApplicantLoans();
-  }, [firestore, applicantName, isRenewal]);
+  }, [firestore, applicantName, isRenewal, allReleasedLoans]);
 
   React.useEffect(() => {
-    if (renewingLoanId) {
+    if (renewingLoanId && isRenewal) {
       const selected = eligibleLoans.find((l) => l.id === renewingLoanId);
       setSelectedOldLoan(selected || null);
+      if (selected) {
+        form.setValue("paymentTerm", selected.paymentTerm, { shouldValidate: true });
+        if (selected.originalAmount) {
+          form.setValue("amount", selected.originalAmount, { shouldValidate: true });
+        }
+      }
     } else {
       setSelectedOldLoan(null);
     }
-  }, [renewingLoanId, eligibleLoans]);
+  }, [renewingLoanId, isRenewal, eligibleLoans, form]);
 
   const computation = React.useMemo(() => {
     if (!paymentTerm || paymentTerm <= 0 || !loanAmount)
@@ -269,8 +328,9 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     const firstMonthInterest = schedule[0]?.interest || 0;
     const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
     const outstandingBalance = isRenewal ? Math.round((selectedOldLoan?.unpaidPrincipal || 0) * 100) / 100 : 0;
+    const outstandingPenalty = isRenewal ? Math.round((selectedOldLoan?.outstandingPenalty || 0) * 100) / 100 : 0;
     
-    const totalDeductions = serviceCharge + shareCapital + firstMonthAmortizationDeduction + firstMonthInterest + outstandingBalance;
+    const totalDeductions = serviceCharge + shareCapital + firstMonthAmortizationDeduction + firstMonthInterest + outstandingBalance + outstandingPenalty;
     const netProceeds = principal - totalDeductions;
 
     return {
@@ -285,6 +345,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       totalDeductions,
       netProceeds,
       outstandingBalance,
+      outstandingPenalty,
     };
   }, [loanAmount, paymentTerm, selectedOldLoan, isRenewal]);
 
@@ -580,7 +641,11 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                                 <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-bold text-muted-foreground">₱</span>
                                 <Input 
                                   type="number" 
-                                  className="pl-12 h-20 text-4xl font-black border-[#E2E8F0] shadow-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                  className={cn(
+                                    "pl-12 h-20 text-4xl font-black border-[#E2E8F0] shadow-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                    (isRenewal && selectedOldLoan) && "bg-gray-50 text-gray-500 cursor-not-allowed opacity-60 pointer-events-none"
+                                  )}
+                                  readOnly={isRenewal && !!selectedOldLoan}
                                   {...field} 
                                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                                 />
@@ -598,21 +663,26 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                           <FormItem>
                             <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Amortization Period</FormLabel>
                             <div className="grid grid-cols-4 gap-2">
-                              {paymentTermOptions.map((term) => (
-                                <button
-                                  key={term}
-                                  type="button"
-                                  onClick={() => field.onChange(term)}
-                                  className={cn(
-                                    "h-14 rounded-xl border-2 font-bold transition-all",
-                                    field.value === term 
-                                      ? "border-primary bg-primary/5 text-primary" 
-                                      : "border-[#E2E8F0] text-muted-foreground hover:border-primary/30"
-                                  )}
-                                >
-                                  {term} mo
-                                </button>
-                              ))}
+                              {paymentTermOptions.map((term) => {
+                                const isDisabled = isRenewal && selectedOldLoan && selectedOldLoan.paymentTerm !== term;
+                                return (
+                                  <button
+                                    key={term}
+                                    type="button"
+                                    onClick={() => field.onChange(term)}
+                                    disabled={isDisabled || false}
+                                    className={cn(
+                                      "h-14 rounded-xl border-2 font-bold transition-all",
+                                      field.value === term 
+                                        ? "border-primary bg-primary/5 text-primary" 
+                                        : "border-[#E2E8F0] text-muted-foreground hover:border-primary/30",
+                                      isDisabled && "opacity-40 cursor-not-allowed bg-gray-50 text-gray-300 hover:border-[#E2E8F0]"
+                                    )}
+                                  >
+                                    {term} mo
+                                  </button>
+                                );
+                              })}
                             </div>
                             <FormMessage />
                           </FormItem>
@@ -648,34 +718,41 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                        {computation && (
                          <div className="space-y-4 pt-4 border-t border-[#E2E8F0]">
                            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Itemized Deductions</h3>
-                           <div className="bg-[#1A1A1A] text-white rounded-2xl p-6 space-y-3 shadow-xl">
-                             <div className="flex justify-between items-center text-sm text-white/80">
+                           <div className="bg-[#FAFAFA] border border-[#E2E8F0] rounded-2xl p-6 space-y-3 shadow-sm">
+                             <div className="flex justify-between items-center text-sm text-muted-foreground">
                                <span>Service Charge (6% per year)</span>
-                               <span className="font-medium text-white">{formatCurrency(computation.serviceCharge)}</span>
+                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.serviceCharge)}</span>
                              </div>
-                             <div className="flex justify-between items-center text-sm text-white/80">
+                             <div className="flex justify-between items-center text-sm text-muted-foreground">
                                <span>Share Capital (1%)</span>
-                               <span className="font-medium text-white">{formatCurrency(computation.shareCapital)}</span>
+                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.shareCapital)}</span>
                              </div>
-                             <div className="flex justify-between items-center text-sm text-white/80">
+                             <div className="flex justify-between items-center text-sm text-muted-foreground">
                                <span>First Month Amortization</span>
-                               <span className="font-medium text-white">{formatCurrency(computation.firstMonthAmortization)}</span>
+                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.firstMonthAmortization)}</span>
                              </div>
-                             <div className="flex justify-between items-center text-sm text-white/80">
+                             <div className="flex justify-between items-center text-sm text-muted-foreground">
                                <span>First Month Interest</span>
-                               <span className="font-medium text-white">{formatCurrency(computation.firstMonthInterest)}</span>
+                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.firstMonthInterest)}</span>
                              </div>
                              
                              {computation.outstandingBalance > 0 && (
-                               <div className="flex justify-between items-center text-sm text-white/80 pt-2 border-t border-white/10">
-                                 <span className="text-red-400">Outstanding Balance (Renewal)</span>
-                                 <span className="font-bold text-red-400">- {formatCurrency(computation.outstandingBalance)}</span>
+                               <div className="flex justify-between items-center text-sm text-red-500 font-semibold pt-2 border-t border-[#E2E8F0]">
+                                 <span>Outstanding Balance (Renewal)</span>
+                                 <span>- {formatCurrency(computation.outstandingBalance)}</span>
                                </div>
                              )}
 
-                             <div className="pt-4 mt-2 border-t border-white/20 flex justify-between items-center">
-                               <span className="font-bold uppercase tracking-widest text-[10px] text-white/60">Net Proceeds</span>
-                               <span className="font-black text-2xl text-green-400">{formatCurrency(computation.netProceeds)}</span>
+                             {computation.outstandingPenalty > 0 && (
+                               <div className="flex justify-between items-center text-sm text-red-500 font-semibold pt-1">
+                                 <span>Surcharge Penalty (Double 2%)</span>
+                                 <span>- {formatCurrency(computation.outstandingPenalty)}</span>
+                               </div>
+                             )}
+
+                             <div className="pt-4 mt-2 border-t border-[#E2E8F0] flex justify-between items-center">
+                               <span className="font-bold uppercase tracking-widest text-[10px] text-muted-foreground">Net Proceeds</span>
+                               <span className="font-black text-2xl text-green-600">{formatCurrency(computation.netProceeds)}</span>
                              </div>
                            </div>
                          </div>
