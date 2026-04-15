@@ -609,8 +609,8 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={loan.status === 'fully-paid' || userRole !== 'approver'}
-                              className={userRole !== 'approver' ? 'opacity-50 cursor-not-allowed' : ''}
+                              disabled={loan.status === 'fully-paid' || !['approver', 'admin', 'creditCommitteeOfficer', 'creditCommitteeMember'].includes(userRole || '')}
+                              className={!['approver', 'admin', 'creditCommitteeOfficer', 'creditCommitteeMember'].includes(userRole || '') ? 'opacity-50 cursor-not-allowed' : ''}
                             >
                               <ChevronDown className="h-4 w-4" />
                             </Button>

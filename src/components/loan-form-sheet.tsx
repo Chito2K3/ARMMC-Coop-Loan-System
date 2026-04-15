@@ -77,10 +77,19 @@ const loanFormSchema = z.object({
       message: "Please select a valid payment term.",
     }),
   loanType: z.string().min(1, "Please select a loan type."),
+  subLoanType: z.string().optional(),
   purpose: z.string().min(1, "Please select a purpose."),
   remarks: z.string().optional(),
   isRenewal: z.boolean().default(false),
   renewingLoanId: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.loanType === 'Others' && !data.subLoanType) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["subLoanType"],
+      message: "Please select a specific loan category.",
+    });
+  }
 });
 
 type LoanFormValues = z.infer<typeof loanFormSchema>;
@@ -113,6 +122,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           amount: loan.amount,
           paymentTerm: loan.paymentTerm,
           loanType: loan.loanType,
+          subLoanType: loan.subLoanType || "",
           purpose: loan.purpose,
           remarks: loan.remarks || "",
           isRenewal: !!loan.renewalOf,
@@ -124,6 +134,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           amount: 0,
           paymentTerm: 6,
           loanType: "",
+          subLoanType: "",
           purpose: "",
           remarks: "",
           isRenewal: false,
@@ -149,6 +160,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           amount: loan.amount,
           paymentTerm: loan.paymentTerm,
           loanType: loan.loanType,
+          subLoanType: loan.subLoanType || "",
           purpose: loan.purpose,
           remarks: loan.remarks || "",
           isRenewal: !!loan.renewalOf,
@@ -161,6 +173,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           amount: 0,
           paymentTerm: 6,
           loanType: "",
+          subLoanType: "",
           purpose: "",
           remarks: "",
           isRenewal: false,
@@ -355,15 +368,24 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     try {
       if (isEditMode && loan) {
         const loanRef = doc(firestore, "loans", loan.id);
+        const updatedData = { ...data };
+        if (updatedData.loanType !== 'Others') {
+          updatedData.subLoanType = '';
+        }
         await updateDocumentNonBlocking(loanRef, {
-          ...data,
+          ...updatedData,
           updatedAt: serverTimestamp(),
         });
         toast({ title: "Update In Progress" });
       } else {
         const loanNumber = await getNextLoanNumber(firestore);
+        const loanDataToSave = { ...data };
+        if (loanDataToSave.loanType !== 'Others') {
+          loanDataToSave.subLoanType = '';
+        }
+        
         const newLoan = {
-          ...data,
+          ...loanDataToSave,
           loanNumber,
           salary: 0,
           status: "pending" as const,
@@ -602,6 +624,33 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                           </FormItem>
                         )}
                       />
+
+                      {form.watch("loanType") === "Others" && (
+                        <FormField
+                          control={form.control}
+                          name="subLoanType"
+                          render={({ field }) => (
+                            <FormItem className="animate-in fade-in slide-in-from-top-2">
+                              <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Specific Loan Category</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                <FormControl>
+                                  <SelectTrigger className="h-14 text-lg border-[#E2E8F0] shadow-none">
+                                    <SelectValue placeholder="Select specific type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Mid-Year Bonus Loan">Mid-Year Bonus Loan</SelectItem>
+                                  <SelectItem value="Year-End Bonus Loan">Year-End Bonus Loan</SelectItem>
+                                  <SelectItem value="Clothing Allowance Loan">Clothing Allowance Loan</SelectItem>
+                                  <SelectItem value="Appliance Loan">Appliance Loan</SelectItem>
+                                  <SelectItem value="Furniture Loan">Furniture Loan</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
 
                       <FormField
                         control={form.control}

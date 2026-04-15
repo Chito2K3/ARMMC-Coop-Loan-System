@@ -287,7 +287,7 @@ export function ExistingLoansCheck({
             <div key={loan.id} className="flex items-center justify-between p-2 bg-background rounded border border-primary/10">
               <div className="flex-1">
                 <p className="text-sm font-medium">Loan #{loan.loanNumber}</p>
-                <p className="text-xs text-muted-foreground">{loan.loanType}</p>
+                <p className="text-xs text-muted-foreground">{loan.loanType}{loan.subLoanType ? ` - ${loan.subLoanType}` : ''}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold">₱{loan.amount.toLocaleString()}</p>

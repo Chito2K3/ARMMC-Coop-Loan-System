@@ -302,7 +302,7 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
                             {loan.applicantName}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {loan.loanType}
+                            {loan.loanType}{loan.subLoanType ? ` - ${loan.subLoanType}` : ''}
                           </TableCell>
                           <TableCell className="text-right font-bold text-[#1A1A1A]">
                             {formatCurrency(loan.amount)}

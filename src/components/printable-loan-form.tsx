@@ -243,21 +243,21 @@ export function PrintableLoanForm({ loan, formRef }: PrintableLoanFormProps) {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ ...checkboxStyle }}></span>
+              <span style={{ ...checkboxStyle }}>{loan.loanType === 'Others' ? <CheckMark /> : null}</span>
               <span>Others, please specify:</span>
-              <span style={{ borderBottom: '1px solid #000', flex: 1, marginLeft: '6px' }}></span>
+              <span style={{ borderBottom: '1px solid #000', flex: 1, marginLeft: '6px' }}><div style={{ paddingBottom: '2px' }}>{loan.subLoanType || ''}</div></span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ ...checkboxStyle }}></span>
+                <span style={{ ...checkboxStyle }}>{loan.subLoanType === 'Clothing Allowance Loan' ? <CheckMark /> : null}</span>
                 <span>Clothing</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ ...checkboxStyle }}></span>
+                <span style={{ ...checkboxStyle }}>{loan.subLoanType === 'Mid-Year Bonus Loan' ? <CheckMark /> : null}</span>
                 <span>Mid-year Bonus</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ ...checkboxStyle }}></span>
+                <span style={{ ...checkboxStyle }}>{loan.subLoanType === 'Year-End Bonus Loan' ? <CheckMark /> : null}</span>
                 <span>Year-end Bonus</span>
               </div>
             </div>

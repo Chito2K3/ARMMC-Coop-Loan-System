@@ -543,7 +543,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
   const isPayrollCheckerRole = userRole === 'payrollChecker';
   const isBookkeeperRole = userRole === 'bookkeeper';
-  const isApproverRole = userRole === 'approver';
+  const isApproverRole = userRole === 'approver' || userRole === 'creditCommitteeOfficer' || userRole === 'creditCommitteeMember' || userRole === 'admin';
 
   const isReleasedOrPaid = loan.status === 'released' || loan.status === 'fully-paid';
 
@@ -554,7 +554,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         <CardDescription>Core loan details</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <InfoItem label="Loan Type" value={loan.loanType} />
+        <InfoItem label="Loan Type" value={`${loan.loanType}${loan.subLoanType ? ` - ${loan.subLoanType}` : ''}`} />
         <InfoItem label="Purpose" value={loan.purpose} />
         <InfoItem
           label="Amount"

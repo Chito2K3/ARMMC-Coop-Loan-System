@@ -31,6 +31,7 @@ export interface Loan {
   netProceeds?: number;
   outstandingBalanceAtRenewal?: number;
   membershipType?: 'In-Service Member' | 'Separated from Service Member';
+  subLoanType?: string;
 }
 
 export type PaymentStatus = 'pending' | 'paid';

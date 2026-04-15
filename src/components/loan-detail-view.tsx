@@ -470,7 +470,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const isAdmin = userRole === 'admin';
   const isPayrollCheckerRole = userRole === 'payrollChecker' || isAdmin;
   const isBookkeeperRole = userRole === 'bookkeeper' || isAdmin;
-  const isApproverRole = userRole === 'approver' || isAdmin;
+  const isApproverRole = userRole === 'approver' || userRole === 'creditCommitteeOfficer' || userRole === 'creditCommitteeMember' || isAdmin;
 
   return (
     <div className="space-y-6">
@@ -513,7 +513,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
               <CardDescription>Core loan details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <InfoItem label="Loan Type" value={loan.loanType} />
+              <InfoItem label="Loan Type" value={`${loan.loanType}${loan.subLoanType ? ` - ${loan.subLoanType}` : ''}`} />
               <InfoItem label="Purpose" value={loan.purpose} />
               <InfoItem
                 label="Amount"
