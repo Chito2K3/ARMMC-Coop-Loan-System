@@ -17,6 +17,8 @@ export interface Loan {
   purpose: LoanPurpose;
   bookkeeperChecked: boolean;
   payrollChecked: boolean;
+  committeeMemberChecked?: boolean;
+  committeeOfficerChecked?: boolean;
   denialRemarks?: string;
   remarks?: string;
   createdAt: Timestamp | Date;

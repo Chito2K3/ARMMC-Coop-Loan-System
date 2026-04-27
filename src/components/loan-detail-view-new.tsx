@@ -209,35 +209,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     }
   }, [loan, loanRef]);
 
-  React.useEffect(() => {
-    if (!loan || !firestore || loan.status !== 'released' || !loan.releasedAt) return;
 
-    const regeneratePaymentSchedule = async () => {
-      try {
-        const paymentsRef = collection(firestore, 'loans', loanId, 'payments');
-        const paymentsQuery = query(paymentsRef, orderBy('paymentNumber', 'asc'));
-        const snapshot = await getDocs(paymentsQuery);
-
-        if (snapshot.empty) return;
-
-        const releasedAtDate = loan.releasedAt instanceof Date ? loan.releasedAt : (loan.releasedAt as any).toDate();
-        const batch = writeBatch(firestore);
-
-        snapshot.docs.forEach((paymentDoc, index) => {
-          const dueDate = addMonths(releasedAtDate, index + 1);
-          batch.update(paymentDoc.ref, {
-            dueDate: Timestamp.fromDate(dueDate),
-          });
-        });
-
-        await batch.commit();
-      } catch (error) {
-        console.error('Error regenerating payment schedule:', error);
-      }
-    };
-
-    regeneratePaymentSchedule();
-  }, [loan?.releasedAt, firestore, loanId, loan?.status, loan]);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isPrinting, setIsPrinting] = React.useState(false);
@@ -426,23 +398,27 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     }
   };
 
-  const handleApproveClick = () => {
-    if (!loan?.bookkeeperChecked) {
-      setRequirementMessage('Bookkeeper must verify the loan before approval.');
-      setRequirementDialogOpen(true);
-      return;
-    }
+  const handleVerifyCommitteeMemberClick = () => {
     if (!loan?.payrollChecked) {
-      setRequirementMessage('Payroll Checker must verify the salary before approval.');
+      setRequirementMessage('Payroll Checker must verify the salary first.');
       setRequirementDialogOpen(true);
       return;
     }
-    handleUpdate({ status: 'approved' });
+    handleUpdate({ committeeMemberChecked: true });
+  };
+
+  const handleApproveClick = () => {
+    if (!loan?.committeeMemberChecked) {
+      setRequirementMessage('Credit Committee Member must verify the loan before final approval.');
+      setRequirementDialogOpen(true);
+      return;
+    }
+    handleUpdate({ status: 'approved', committeeOfficerChecked: true });
   };
 
   const handleDenyClick = () => {
-    if (!loan?.payrollChecked) {
-      setRequirementMessage('Payroll Checker must verify the salary before denial.');
+    if (!loan?.committeeMemberChecked) {
+      setRequirementMessage('Credit Committee Member must verify the loan before denial.');
       setRequirementDialogOpen(true);
       return;
     }
@@ -544,6 +520,8 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   const isPayrollCheckerRole = userRole === 'payrollChecker';
   const isBookkeeperRole = userRole === 'bookkeeper';
   const isApproverRole = userRole === 'approver' || userRole === 'creditCommitteeOfficer' || userRole === 'creditCommitteeMember' || userRole === 'admin';
+  const isCommitteeMemberRole = userRole === 'creditCommitteeMember' || userRole === 'admin';
+  const isCommitteeOfficerRole = userRole === 'creditCommitteeOfficer' || userRole === 'approver' || userRole === 'admin';
 
   const isReleasedOrPaid = loan.status === 'released' || loan.status === 'fully-paid';
 
@@ -575,31 +553,33 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
 
   const managementCard = (
     <Card>
-      <CardHeader>
-        <CardTitle>Management</CardTitle>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Management</CardTitle>
         <CardDescription>Edit and manage loan</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <Button
-          size="sm"
-          variant="default"
-          className="w-full"
-          onClick={() => setSheetOpen(true)}
-          disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
-        >
-          <FilePenLine className="h-4 w-4 mr-2" />
-          Edit Loan
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={() => setDeleteDialogOpen(true)}
-          disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete Loan
-        </Button>
+      <CardContent>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-8 text-xs border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/60 transition-all"
+            onClick={() => setSheetOpen(true)}
+            disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+          >
+            <FilePenLine className="h-3 w-3 mr-1.5" />
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/5 hover:border-destructive/60 transition-all"
+            onClick={() => setDeleteDialogOpen(true)}
+            disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+          >
+            <Trash2 className="h-3 w-3 mr-1.5" />
+            Delete
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -630,10 +610,19 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             {loan.payrollChecked && <Check className="h-4 w-4 text-green-500" />}
           </div>
 
-          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.payrollChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'}`}>
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.payrollChecked && !loan.committeeMemberChecked ? 'bg-indigo-50 border border-indigo-200' : 'bg-muted/50'}`}>
+            <ClipboardCheck className={`h-5 w-5 ${loan.committeeMemberChecked ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Committee Verification</p>
+              <p className="text-xs text-muted-foreground">{loan.committeeMemberChecked ? 'Verified' : 'Pending verification'}</p>
+            </div>
+            {loan.committeeMemberChecked && <Check className="h-4 w-4 text-green-500" />}
+          </div>
+
+          <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.committeeMemberChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'}`}>
             <ThumbsUp className={`h-5 w-5 ${['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : loan.status === 'denied' ? 'text-red-500' : 'text-muted-foreground'}`} />
             <div className="flex-1">
-              <p className="font-medium text-sm">Approval</p>
+              <p className="font-medium text-sm">Officer Approval</p>
               <p className="text-xs text-muted-foreground">{loan.status === 'approved' ? 'Approved' : loan.status === 'denied' ? 'Denied' : 'Pending approval'}</p>
             </div>
             {['approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
@@ -696,15 +685,34 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           </div>
         )}
 
-        {loan.status === 'pending' && loan.payrollChecked && (
+        {loan.status === 'pending' && loan.payrollChecked && !loan.committeeMemberChecked && (
           <div className="space-y-3">
-            <p className="text-sm font-medium">Approval Required</p>
+            <p className="text-sm font-medium">Committee Verification Required</p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleVerifyCommitteeMemberClick}
+                disabled={isSubmitting || !isCommitteeMemberRole}
+                className="flex-1"
+              >
+                <ClipboardCheck className="mr-2 h-4 w-4" /> Verify Application
+              </Button>
+            </div>
+            {!isCommitteeMemberRole && (
+              <p className="text-xs text-muted-foreground">Only Credit Committee Members can verify</p>
+            )}
+          </div>
+        )}
+
+        {loan.status === 'pending' && loan.committeeMemberChecked && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Officer Approval Required</p>
             <div className="flex gap-2">
               <Button
                 size="sm"
                 onClick={handleApproveClick}
-                disabled={isSubmitting || !isApproverRole}
-                className="flex-1"
+                disabled={isSubmitting || !isCommitteeOfficerRole}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
               >
                 <ThumbsUp className="mr-2 h-4 w-4" /> Approve
               </Button>
@@ -712,14 +720,14 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                 size="sm"
                 variant="destructive"
                 onClick={handleDenyClick}
-                disabled={isSubmitting || !isApproverRole}
+                disabled={isSubmitting || !isCommitteeOfficerRole}
                 className="flex-1"
               >
                 <ThumbsDown className="mr-2 h-4 w-4" /> Deny
               </Button>
             </div>
-            {!isApproverRole && (
-              <p className="text-xs text-muted-foreground">Only approver can approve/deny loans</p>
+            {!isCommitteeOfficerRole && (
+              <p className="text-xs text-muted-foreground">Only Credit Committee Officers can approve/deny</p>
             )}
           </div>
         )}
@@ -789,6 +797,18 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           <Label>Payroll Verified</Label>
           <div className="text-sm">
             {loan.payrollChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-muted-foreground" />}
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <Label>Committee Member Verified</Label>
+          <div className="text-sm">
+            {loan.committeeMemberChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-muted-foreground" />}
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <Label>Committee Officer Verified</Label>
+          <div className="text-sm">
+            {loan.committeeOfficerChecked ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-muted-foreground" />}
           </div>
         </div>
       </CardContent>

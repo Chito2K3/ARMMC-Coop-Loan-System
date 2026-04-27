@@ -32,7 +32,7 @@ service cloud.firestore {
     match /loans/{loanId} {
       allow read: if request.auth != null;
       allow create: if hasAnyRole(['admin', 'bookkeeper']);
-      allow update: if hasAnyRole(['admin', 'bookkeeper', 'approver', 'payrollChecker']);
+      allow update: if hasAnyRole(['admin', 'bookkeeper', 'approver', 'payrollChecker', 'creditCommitteeOfficer', 'creditCommitteeMember']);
       // Admins: delete any loan. Bookkeepers: delete pending loans only.
       allow delete: if hasRole('admin') || (hasRole('bookkeeper') && resource.data.status == 'pending');
 
@@ -41,7 +41,7 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if hasAnyRole(['admin', 'bookkeeper']);
         allow update: if hasAnyRole(['admin', 'bookkeeper']) ||
-          (hasRole('approver') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['penaltyWaived', 'penaltyDenied', 'amount', 'updatedAt']));
+          (hasAnyRole(['approver', 'creditCommitteeOfficer', 'creditCommitteeMember']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['penaltyWaived', 'penaltyDenied', 'amount', 'updatedAt']));
         // Bookkeepers need delete permission to cascade-delete when removing a pending loan
         allow delete: if hasAnyRole(['admin', 'bookkeeper']);
       }

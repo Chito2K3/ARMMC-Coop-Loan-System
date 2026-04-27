@@ -114,7 +114,7 @@ export function LoanComputationDialog({
 
     // Fees calculation
     const loanTermInYears = term / 12;
-    const serviceCharge = principal * 0.06 * loanTermInYears; 
+    const serviceCharge = principal * 0.01 * loanTermInYears; 
     const shareCapital = principal * 0.01;
 
     // First month deductions
@@ -242,7 +242,7 @@ export function LoanComputationDialog({
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
                <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
-                  Service Charge (6% per year)
+                  Service Charge (1% per year)
                 </span>
                 <span className="font-medium">
                   {formatCurrency(computation.serviceCharge)}
@@ -250,7 +250,7 @@ export function LoanComputationDialog({
               </div>
 
               <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">Share Capital (1%)</span>
+                <span className="text-muted-foreground">Share Capital (1% retain)</span>
                 <span className="font-medium">
                   {formatCurrency(computation.shareCapital)}
                 </span>

@@ -64,7 +64,7 @@ const loanFormSchema = z.object({
     message: "Applicant name must be at least 2 characters.",
   }),
   membershipType: z.enum(["In-Service Member", "Separated from Service Member"], {
-    required_error: "Please select a membership type.",
+    message: "Please select a membership type.",
   }),
   amount: z.union([z.string(), z.number()])
     .transform((val) => Number(val))
@@ -336,7 +336,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     
     const monthlyAmortizationPrincipal = Math.round(schedule[0]?.principal * 100) / 100 || 0;
     const loanTermInYears = term / 12;
-    const serviceCharge = principal * 0.06 * loanTermInYears; 
+    const serviceCharge = principal * 0.01 * loanTermInYears; 
     const shareCapital = principal * 0.01;
     const firstMonthInterest = schedule[0]?.interest || 0;
     const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
@@ -391,7 +391,8 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           status: "pending" as const,
           bookkeeperChecked: true,
           payrollChecked: false,
-          denialRemarks: "",
+          committeeMemberChecked: false,
+          committeeOfficerChecked: false,
           renewalOf: data.isRenewal ? data.renewingLoanId : null,
           netProceeds: data.isRenewal ? Math.round((loanAmount - (selectedOldLoan?.unpaidPrincipal || 0)) * 100) / 100 : null,
           outstandingBalanceAtRenewal: data.isRenewal ? Math.round((selectedOldLoan?.unpaidPrincipal || 0) * 100) / 100 : null,
@@ -769,11 +770,11 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Itemized Deductions</h3>
                            <div className="bg-[#FAFAFA] border border-[#E2E8F0] rounded-2xl p-6 space-y-3 shadow-sm">
                              <div className="flex justify-between items-center text-sm text-muted-foreground">
-                               <span>Service Charge (6% per year)</span>
+                               <span>Service Charge (1% per year)</span>
                                <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.serviceCharge)}</span>
                              </div>
                              <div className="flex justify-between items-center text-sm text-muted-foreground">
-                               <span>Share Capital (1%)</span>
+                               <span>Share Capital (1% retain)</span>
                                <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.shareCapital)}</span>
                              </div>
                              <div className="flex justify-between items-center text-sm text-muted-foreground">

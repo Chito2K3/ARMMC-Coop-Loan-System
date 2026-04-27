@@ -14,7 +14,7 @@ import { Calendar as CalendarIcon, ChevronDown, Pencil } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
+import { DatePickerInput } from '@/components/ui/date-picker-input';
 import { Input } from '@/components/ui/input';
 import {
   Popover,
@@ -82,6 +82,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   const [editAmount, setEditAmount] = React.useState<number | ''>('');
   const [isAuditDialogOpen, setIsAuditDialogOpen] = React.useState(false);
   const [auditPaymentAmount, setAuditPaymentAmount] = React.useState<number | ''>('');
+  const [auditPaymentDate, setAuditPaymentDate] = React.useState<Date | undefined>(new Date());
 
   React.useEffect(() => {
     const loadSettings = async () => {
@@ -135,10 +136,21 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
     }
     
     // Check if surcharge is paid
-    const isPending = effectiveShortfall > 0 && surcharge > 0 && (loan.final_surcharge_paid || 0) < surcharge - 0.01;
+    const isPending = effectiveShortfall > 0 && (loan.final_surcharge_paid || 0) < (surcharge + effectiveShortfall) - 0.01;
     
     return { totalShortfall: effectiveShortfall, surchargeAmount: surcharge, isSurchargePending: isPending };
   }, [payments, loan.historical_shortfall_bucket, loan.final_surcharge_paid]);
+
+  // Auto-sync loan status to 'fully-paid' when all payments are completed and settled
+  React.useEffect(() => {
+    if (!firestore || !loan || loan.status === 'fully-paid') return;
+    if (payments.length === 0 || isLoading) return;
+
+    const allPaid = payments.every(p => p.status === 'paid');
+    if (allPaid && !isSurchargePending) {
+        updateDocumentNonBlocking(doc(firestore, 'loans', loan.id), { status: 'fully-paid' });
+    }
+  }, [firestore, loan, payments, isSurchargePending, isLoading]);
 
   const handleSettleSurcharge = async () => {
     if (!firestore) return;
@@ -156,7 +168,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       
       await updateDocumentNonBlocking(loanRef, {
         final_surcharge_paid: totalPaidNow,
-        final_surcharge_date: serverTimestamp(),
+        final_surcharge_date: auditPaymentDate ? Timestamp.fromDate(auditPaymentDate) : serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       
@@ -167,10 +179,11 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
 
       setIsAuditDialogOpen(false);
       setAuditPaymentAmount('');
+      setAuditPaymentDate(new Date());
       
       // Check if all payments are paid
       const allPaid = payments.every(p => p.status === 'paid');
-      if (allPaid && totalPaidNow >= surchargeAmount - 0.01) {
+      if (allPaid && totalPaidNow >= (surchargeAmount + totalShortfall) - 0.01) {
         await updateDocumentNonBlocking(loanRef, { status: 'fully-paid' });
         toast({
           title: 'Loan Fully Paid!',
@@ -540,34 +553,14 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
                       {payment.dueDate ? format(payment.dueDate, 'MMM d, yyyy') : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={'outline'}
-                            className={cn(
-                              'w-[200px] justify-start text-left font-normal',
-                              !payment.paymentDate && 'text-muted-foreground',
-                              userRole !== 'bookkeeper' && 'opacity-50 cursor-not-allowed'
-                            )}
-                            disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {payment.paymentDate ? (
-                              format(payment.paymentDate, 'MMM d, yyyy')
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={payment.paymentDate}
-                            onSelect={(date) => handleDateChange(payment.id, date)}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <DatePickerInput
+                        value={payment.paymentDate as Date | undefined}
+                        onChange={(date) => {
+                          if (date) handleDateChange(payment.id, date);
+                        }}
+                        disabled={loan.status === 'fully-paid' || userRole !== 'bookkeeper'}
+                        className="w-[200px]"
+                      />
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(payment.amount)}
@@ -637,30 +630,60 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
               
               {/* SHADOW ROW FOR SHORTFALL */}
               {totalShortfall > 0 && (
-                <TableRow className="bg-orange-50/50 hover:bg-orange-50/80">
-                  <TableCell className="font-bold text-orange-800">Audit</TableCell>
-                  <TableCell colSpan={2} className="text-orange-800 italic font-medium">
-                    Historical Shortfall & Double 2% (4%) Surcharge
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {/* Final surcharge paid */}
-                    {loan.final_surcharge_paid ? (
-                      <Badge className="bg-green-600">Settled</Badge>
-                    ) : '—'}
-                  </TableCell>
-                  <TableCell className="text-right text-orange-800 font-bold text-xl">
-                    {formatCurrency(totalShortfall)}
-                  </TableCell>
-                  <TableCell className="text-right text-destructive font-bold">
-                    {formatCurrency(surchargeAmount)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {userRole === 'bookkeeper' && loan.status !== 'fully-paid' && isSurchargePending && (
-                       <Button size="sm" variant="destructive" onClick={() => setIsAuditDialogOpen(true)} className="w-full">Settle</Button>
-                    )}
-                    {!isSurchargePending && <span className="text-sm font-bold text-green-600">Paid</span>}
-                  </TableCell>
-                </TableRow>
+                <>
+                  <TableRow className="bg-muted/30 hover:bg-muted/50 text-muted-foreground/80">
+                    <TableCell className="font-semibold">Audit</TableCell>
+                    <TableCell colSpan={2} className="italic text-sm">
+                      Historical Shortfall & Double 2% (4%) Surcharge
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {loan.final_surcharge_paid ? (
+                        <Badge className="bg-green-600">Settled</Badge>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-lg">
+                      {formatCurrency(totalShortfall)}
+                    </TableCell>
+                    <TableCell className="text-right text-destructive font-medium text-lg">
+                      {formatCurrency(surchargeAmount)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      —
+                    </TableCell>
+                  </TableRow>
+                  {/* TOTAL TO SETTLE ROW */}
+                  <TableRow className="bg-primary/5 hover:bg-primary/10 transition-colors">
+                    <TableCell colSpan={4} className="text-right font-semibold text-primary/80 border-t-2 border-primary/20 py-4">
+                      TOTAL AMOUNT TO SETTLE (Shortfall + Surcharge):
+                    </TableCell>
+                    <TableCell colSpan={2} className="text-center font-bold text-2xl text-primary bg-primary/10 border-t-2 border-primary/20 py-4 shadow-inner">
+                      {formatCurrency(totalShortfall + surchargeAmount)}
+                    </TableCell>
+                    <TableCell className="text-center border-t-2 border-primary/20">
+                      {!isSurchargePending ? (
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-bold text-green-600 bg-green-100 px-2 py-1 rounded-md">Fully Settled</span>
+                          {loan.final_surcharge_date && (
+                            <span className="text-xs text-muted-foreground mt-1">
+                              {format((loan.final_surcharge_date as any).toDate ? (loan.final_surcharge_date as any).toDate() : loan.final_surcharge_date, 'MMM d, yyyy')}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        userRole === 'bookkeeper' && loan.status !== 'fully-paid' ? (
+                          <Button size="sm" variant="default" onClick={() => setIsAuditDialogOpen(true)} className="w-full font-semibold shadow-sm">
+                            Settle Now
+                          </Button>
+                        ) : (
+                          <span className="text-sm font-medium text-amber-600 flex items-center justify-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            Pending
+                          </span>
+                        )
+                      )}
+                    </TableCell>
+                  </TableRow>
+                </>
               )}
             </TableBody>
           </Table>
@@ -717,6 +740,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
         if (!open) {
           setIsAuditDialogOpen(false);
           setAuditPaymentAmount('');
+          setAuditPaymentDate(new Date());
         }
       }}>
         <DialogContent>
@@ -724,10 +748,20 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
             <DialogTitle>Settle Surcharge Offset</DialogTitle>
             <DialogDescription>
               Enter the amount collected to offset the historical shortfall & penalty. 
-              Total Required: <span className="font-bold text-destructive">{formatCurrency(surchargeAmount - (loan.final_surcharge_paid || 0))}</span>
+              Total Required: <span className="font-bold text-destructive">{formatCurrency((surchargeAmount + totalShortfall) - (loan.final_surcharge_paid || 0))}</span>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Date Settled</Label>
+              <DatePickerInput
+                value={auditPaymentDate}
+                onChange={(date) => {
+                  if (date) setAuditPaymentDate(date);
+                }}
+                className="w-full z-[1000]"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="audit-amount">Amount Settled</Label>
               <div className="relative flex items-center">
@@ -748,6 +782,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
             <Button variant="outline" onClick={() => {
               setIsAuditDialogOpen(false);
               setAuditPaymentAmount('');
+              setAuditPaymentDate(new Date());
             }}>
               Cancel
             </Button>
