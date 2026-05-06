@@ -6,7 +6,8 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useFirestore } from "@/firebase/provider";
-import { collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { ensureUserDoc } from "@/firebase/user-service";
 
 const LoadingSpinner = () => (
     <div className="fixed inset-0 flex items-center justify-center bg-background z-50">
@@ -58,18 +59,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
                         setAuthState({ isRoleChecked: true, isAuthorized: true, shouldShowContent: true });
                     }
                 } else {
-                        // User document doesn't exist - create one keyed by UID so
-                        // security rules that lookup `users/{request.auth.uid}` succeed.
-                        const userId = user.uid;
-                        const now = new Date();
-
-                        await setDoc(doc(firestore, 'users', userId), {
-                            email: user.email,
-                            name: user.displayName || user.email?.split('@')[0] || 'User',
-                            role: 'bookkeeper', // Default role for new users
-                            createdAt: now,
-                            updatedAt: now,
-                        });
+                    // User document doesn't exist — create one using the shared utility
+                    await ensureUserDoc(firestore, user.uid, user.email, user.displayName, 'user');
 
                     // After creating the user, allow them to access the app
                     setAuthState({ isRoleChecked: true, isAuthorized: true, shouldShowContent: true });

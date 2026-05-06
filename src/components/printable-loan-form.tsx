@@ -31,34 +31,26 @@ function computeLoanDetails(loan: Loan) {
   for (let month = 1; month <= term; month++) {
     const interest = beginningBalance * interestRate;
     totalInterest += interest;
-    let principalPayment = 0;
-    let totalMonthlyPayment = 0;
-
-    if (month === term) {
-      principalPayment = principal - totalPrincipalPaid;
-      totalMonthlyPayment = principalPayment + interest;
-    } else {
-      const exactTotal = approxMonthlyPrincipal + interest;
-      totalMonthlyPayment = Math.round(exactTotal);
-      principalPayment = totalMonthlyPayment - interest;
-    }
+    let principalPayment = month === term ? principal - totalPrincipalPaid : Math.round(approxMonthlyPrincipal);
     const endingBalance = beginningBalance - principalPayment;
     schedule.push({ month, beginningBalance, interest, principal: principalPayment, endingBalance: endingBalance < 0 ? 0 : endingBalance });
     beginningBalance = endingBalance;
     totalPrincipalPaid += principalPayment;
   }
 
-  const monthlyAmortization = Math.round(schedule[0]?.principal * 100) / 100 || 0;
+  const monthlyAmortization = schedule[0]?.principal || 0;
   const loanTermInYears = term / 12;
   const serviceCharge = principal * 0.06 * loanTermInYears;
   const shareCapital = principal * 0.01;
-  const firstMonthInterest = schedule[0]?.interest || 0;
-  const firstMonthAmortization = term === 1 ? 0 : monthlyAmortization;
+
+  // Round total interest DOWN to nearest whole peso to match manual ledger
+  totalInterest = Math.floor(totalInterest);
+
   const outstandingBalance = loan.outstandingBalanceAtRenewal || 0;
-  const totalDeductions = serviceCharge + shareCapital + firstMonthAmortization + firstMonthInterest + outstandingBalance;
+  const totalDeductions = serviceCharge + shareCapital + totalInterest + outstandingBalance;
   const netProceeds = principal - totalDeductions;
 
-  return { monthlyAmortization, serviceCharge, shareCapital, firstMonthInterest, firstMonthAmortization, totalDeductions, netProceeds, outstandingBalance, totalInterest };
+  return { monthlyAmortization, serviceCharge, shareCapital, totalDeductions, netProceeds, outstandingBalance, totalInterest };
 }
 
 const CheckMark = () => (

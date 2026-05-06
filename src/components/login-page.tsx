@@ -135,7 +135,7 @@ export function LoginPage() {
                         fontSize: '0.9rem', color: 'rgba(255,255,255,0.55)',
                         maxWidth: '320px', lineHeight: 1.7, fontStyle: 'italic'
                     }}>
-                        "Empowering our members through cooperative finance and mutual growth."
+                        {"\u201CEmpowering our members through cooperative finance and mutual growth.\u201D"}
                     </p>
                 </div>
             </div>

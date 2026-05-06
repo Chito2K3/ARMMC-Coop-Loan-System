@@ -232,8 +232,8 @@ export function AdminDashboard() {
               )}
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
-              <strong>Note:</strong> This only sets the user\'s role. The user must still go to the 
-              Login page and click <strong>"Sign Up"</strong> with this email to set their password.
+              <strong>Note:</strong> This only sets the user&apos;s role. The user must still go to the 
+              Login page and click <strong>&quot;Sign Up&quot;</strong> with this email to set their password.
             </p>
           </form>
         </CardContent>

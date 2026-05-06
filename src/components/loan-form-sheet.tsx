@@ -117,29 +117,29 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     resolver: zodResolver(loanFormSchema),
     defaultValues: isEditMode
       ? {
-          applicantName: loan.applicantName,
-          membershipType: (loan.membershipType as "In-Service Member" | "Separated from Service Member") || "In-Service Member",
-          amount: loan.amount,
-          paymentTerm: loan.paymentTerm,
-          loanType: loan.loanType,
-          subLoanType: loan.subLoanType || "",
-          purpose: loan.purpose,
-          remarks: loan.remarks || "",
-          isRenewal: !!loan.renewalOf,
-          renewingLoanId: loan.renewalOf || "",
-        }
+        applicantName: loan.applicantName,
+        membershipType: (loan.membershipType as "In-Service Member" | "Separated from Service Member") || "In-Service Member",
+        amount: loan.amount,
+        paymentTerm: loan.paymentTerm,
+        loanType: loan.loanType,
+        subLoanType: loan.subLoanType || "",
+        purpose: loan.purpose,
+        remarks: loan.remarks || "",
+        isRenewal: !!loan.renewalOf,
+        renewingLoanId: loan.renewalOf || "",
+      }
       : {
-          applicantName: "",
-          membershipType: "In-Service Member",
-          amount: 0,
-          paymentTerm: 6,
-          loanType: "",
-          subLoanType: "",
-          purpose: "",
-          remarks: "",
-          isRenewal: false,
-          renewingLoanId: "",
-        },
+        applicantName: "",
+        membershipType: "In-Service Member",
+        amount: 0,
+        paymentTerm: 6,
+        loanType: "",
+        subLoanType: "",
+        purpose: "",
+        remarks: "",
+        isRenewal: false,
+        renewingLoanId: "",
+      },
   });
 
   const applicantName = form.watch("applicantName");
@@ -152,7 +152,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
     if (open && firestore) {
       getLoanTypes(firestore).then(setLoanTypes);
       getLoanPurposes(firestore).then(setLoanPurposes);
-      
+
       if (isEditMode && loan) {
         form.reset({
           applicantName: loan.applicantName,
@@ -309,17 +309,12 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       totalInterest += interest;
 
       let principalPayment = 0;
-      let totalMonthlyPayment = 0;
-
       if (month === term) {
         principalPayment = principal - totalPrincipalPaid;
-        totalMonthlyPayment = principalPayment + interest;
       } else {
-        const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
-        totalMonthlyPayment = Math.round(exactTotalPayment);
-        principalPayment = totalMonthlyPayment - interest;
+        principalPayment = Math.round(approximateMonthlyPrincipalPayment);
       }
-      
+
       const endingBalance = beginningBalance - principalPayment;
 
       schedule.push({
@@ -333,17 +328,19 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       beginningBalance = endingBalance;
       totalPrincipalPaid += principalPayment;
     }
-    
-    const monthlyAmortizationPrincipal = Math.round(schedule[0]?.principal * 100) / 100 || 0;
+
+    const monthlyAmortizationPrincipal = schedule[0]?.principal || 0;
     const loanTermInYears = term / 12;
-    const serviceCharge = principal * 0.01 * loanTermInYears; 
+    const serviceCharge = principal * 0.06 * loanTermInYears;
     const shareCapital = principal * 0.01;
-    const firstMonthInterest = schedule[0]?.interest || 0;
-    const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
+
+    // Round total interest DOWN to nearest whole peso to match manual ledger
+    totalInterest = Math.floor(totalInterest);
+
     const outstandingBalance = isRenewal ? Math.round((selectedOldLoan?.unpaidPrincipal || 0) * 100) / 100 : 0;
     const outstandingPenalty = isRenewal ? Math.round((selectedOldLoan?.outstandingPenalty || 0) * 100) / 100 : 0;
-    
-    const totalDeductions = serviceCharge + shareCapital + firstMonthAmortizationDeduction + firstMonthInterest + outstandingBalance + outstandingPenalty;
+
+    const totalDeductions = serviceCharge + shareCapital + totalInterest + outstandingBalance + outstandingPenalty;
     const netProceeds = principal - totalDeductions;
 
     return {
@@ -353,8 +350,6 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
       totalInterest,
       serviceCharge,
       shareCapital,
-      firstMonthAmortization: firstMonthAmortizationDeduction,
-      firstMonthInterest,
       totalDeductions,
       netProceeds,
       outstandingBalance,
@@ -383,7 +378,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
         if (loanDataToSave.loanType !== 'Others') {
           loanDataToSave.subLoanType = '';
         }
-        
+
         const newLoan = {
           ...loanDataToSave,
           loanNumber,
@@ -426,16 +421,16 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
             <h2 className="text-xl font-bold tracking-tight text-[#1A1A1A]">New Application</h2>
             <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-semibold">Process steps</p>
           </div>
-          
+
           <div className="space-y-8 relative">
             <div className="absolute left-[15px] top-2 bottom-2 w-[2px] bg-[#E2E8F0]" />
             {steps.map((step, idx) => (
               <div key={idx} className="flex gap-4 relative z-10">
                 <div className={cn(
                   "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300",
-                  currentStep > idx + 1 ? "bg-green-500 text-white" : 
-                  currentStep === idx + 1 ? "bg-primary text-white scale-110 shadow-lg" : 
-                  "bg-white border-2 border-[#E2E8F0] text-muted-foreground"
+                  currentStep > idx + 1 ? "bg-green-500 text-white" :
+                    currentStep === idx + 1 ? "bg-primary text-white scale-110 shadow-lg" :
+                      "bg-white border-2 border-[#E2E8F0] text-muted-foreground"
                 )}>
                   {currentStep > idx + 1 ? "✓" : idx + 1}
                 </div>
@@ -451,27 +446,27 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
           </div>
 
           <div className="mt-auto">
-             <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
-                <p className="text-[10px] uppercase font-black text-primary/40 tracking-tighter">Draft Mode</p>
-                <p className="text-xs text-primary/80 leading-relaxed mt-1">Changes are saved to the secure cooperative ledger upon submission.</p>
-             </div>
+            <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
+              <p className="text-[10px] uppercase font-black text-primary/40 tracking-tighter">Draft Mode</p>
+              <p className="text-xs text-primary/80 leading-relaxed mt-1">Changes are saved to the secure cooperative ledger upon submission.</p>
+            </div>
           </div>
         </div>
 
         {/* Right Side: Form Area */}
         <div className="flex-1 flex flex-col">
           <SheetHeader className="p-12 pb-6 flex flex-row items-end justify-between space-y-0">
-             <div>
-                <SheetTitle className="text-3xl font-black text-[#1A1A1A] leading-none">
-                  {steps[currentStep-1].title}
-                </SheetTitle>
-                <SheetDescription className="text-base mt-2">
-                  Please provide the necessary details for this stage.
-                </SheetDescription>
-             </div>
-             <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
-                Close
-             </Button>
+            <div>
+              <SheetTitle className="text-3xl font-black text-[#1A1A1A] leading-none">
+                {steps[currentStep - 1].title}
+              </SheetTitle>
+              <SheetDescription className="text-base mt-2">
+                Please provide the necessary details for this stage.
+              </SheetDescription>
+            </div>
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
+              Close
+            </Button>
           </SheetHeader>
 
           <Form {...form}>
@@ -487,10 +482,10 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                           <FormItem>
                             <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Full Name of Borrower</FormLabel>
                             <FormControl>
-                              <Input 
-                                placeholder="Enter full name" 
-                                className="h-14 text-xl border-[#E2E8F0] shadow-none bg-[#FAFAFA]/50 focus:bg-white transition-all flex-1" 
-                                {...field} 
+                              <Input
+                                placeholder="Enter full name"
+                                className="h-14 text-xl border-[#E2E8F0] shadow-none bg-[#FAFAFA]/50 focus:bg-white transition-all flex-1"
+                                {...field}
                                 onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                               />
                             </FormControl>
@@ -553,7 +548,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                                   <FormLabel className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Select Loan to Renew</FormLabel>
                                   {eligibleLoans.length === 0 ? (
                                     <div className="text-sm text-amber-600 bg-amber-50 p-4 rounded-xl border border-amber-200">
-                                      {applicantName.length < 2 
+                                      {applicantName.length < 2
                                         ? "Please enter the applicant's name first."
                                         : "No active loans found for this applicant."}
                                     </div>
@@ -566,14 +561,14 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                                       </FormControl>
                                       <SelectContent>
                                         {eligibleLoans.map((loan) => (
-                                          <SelectItem 
-                                            key={loan.id} 
+                                          <SelectItem
+                                            key={loan.id}
                                             value={loan.id}
                                             disabled={!loan.isEligible}
                                           >
                                             <div className="flex flex-col py-1">
                                               <span className="font-medium">
-                                                Loan #{loan.loanNumber} 
+                                                Loan #{loan.loanNumber}
                                                 {!loan.isEligible && " (Not Eligible)"}
                                               </span>
                                               <span className="text-xs text-muted-foreground">
@@ -590,7 +585,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                                 </FormItem>
                               )}
                             />
-                            
+
                             {selectedOldLoan && (
                               <div className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/10 flex justify-between items-center">
                                 <span className="text-sm font-medium text-primary">Outstanding Principal</span>
@@ -689,14 +684,14 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                             <FormControl>
                               <div className="relative">
                                 <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-bold text-muted-foreground">₱</span>
-                                <Input 
-                                  type="number" 
+                                <Input
+                                  type="number"
                                   className={cn(
                                     "pl-12 h-20 text-4xl font-black border-[#E2E8F0] shadow-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                                     (isRenewal && selectedOldLoan) && "bg-gray-50 text-gray-500 cursor-not-allowed opacity-60 pointer-events-none"
                                   )}
                                   readOnly={isRenewal && !!selectedOldLoan}
-                                  {...field} 
+                                  {...field}
                                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
                                 />
                               </div>
@@ -723,8 +718,8 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                                     disabled={isDisabled || false}
                                     className={cn(
                                       "h-14 rounded-xl border-2 font-bold transition-all",
-                                      field.value === term 
-                                        ? "border-primary bg-primary/5 text-primary" 
+                                      field.value === term
+                                        ? "border-primary bg-primary/5 text-primary"
                                         : "border-[#E2E8F0] text-muted-foreground hover:border-primary/30",
                                       isDisabled && "opacity-40 cursor-not-allowed bg-gray-50 text-gray-300 hover:border-[#E2E8F0]"
                                     )}
@@ -743,73 +738,70 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
 
                   {currentStep === 3 && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                       <div className="bg-[#FAFAFA] border rounded-2xl p-8 space-y-6">
-                          <div className="flex justify-between items-center">
-                             <span className="text-muted-foreground">Applicant</span>
-                             <span className="font-bold text-lg">{applicantName}</span>
+                      <div className="bg-[#FAFAFA] border rounded-2xl p-8 space-y-6">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Applicant</span>
+                          <span className="font-bold text-lg">{applicantName}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Amount</span>
+                          <span className="font-black text-2xl text-primary">₱{Number(loanAmount).toLocaleString()}</span>
+                        </div>
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white p-4 rounded-xl border">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold">Term</p>
+                            <p className="text-lg font-bold">{form.getValues("paymentTerm")} Months</p>
                           </div>
-                          <div className="flex justify-between items-center">
-                             <span className="text-muted-foreground">Amount</span>
-                             <span className="font-black text-2xl text-primary">₱{Number(loanAmount).toLocaleString()}</span>
+                          <div className="bg-white p-4 rounded-xl border">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold">Type</p>
+                            <p className="text-lg font-bold truncate">{form.getValues("loanType")}</p>
                           </div>
-                          <Separator />
-                          <div className="grid grid-cols-2 gap-4">
-                             <div className="bg-white p-4 rounded-xl border">
-                                <p className="text-[10px] text-muted-foreground uppercase font-bold">Term</p>
-                                <p className="text-lg font-bold">{form.getValues("paymentTerm")} Months</p>
-                             </div>
-                             <div className="bg-white p-4 rounded-xl border">
-                                <p className="text-[10px] text-muted-foreground uppercase font-bold">Type</p>
-                                <p className="text-lg font-bold truncate">{form.getValues("loanType")}</p>
-                             </div>
+                        </div>
+                      </div>
+
+                      {computation && (
+                        <div className="space-y-4 pt-4 border-t border-[#E2E8F0]">
+                          <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Itemized Deductions</h3>
+                          <div className="bg-[#FAFAFA] border border-[#E2E8F0] rounded-2xl p-6 space-y-3 shadow-sm">
+                            <div className="flex justify-between items-center text-sm text-muted-foreground">
+                              <span>Service Charge (6% per year)</span>
+                              <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.serviceCharge)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm text-muted-foreground">
+                              <span>Share Capital (1% retain)</span>
+                              <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.shareCapital)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm text-muted-foreground">
+                              <span>Interest (1.5% diminishing per month)</span>
+                              <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.totalInterest)}</span>
+                            </div>
+
+
+                            {computation.outstandingBalance > 0 && (
+                              <div className="flex justify-between items-center text-sm text-red-500 font-semibold pt-2 border-t border-[#E2E8F0]">
+                                <span>Outstanding Balance (Renewal)</span>
+                                <span>- {formatCurrency(computation.outstandingBalance)}</span>
+                              </div>
+                            )}
+
+                            {computation.outstandingPenalty > 0 && (
+                              <div className="flex justify-between items-center text-sm text-red-500 font-semibold pt-1">
+                                <span>Surcharge Penalty (Double 2%)</span>
+                                <span>- {formatCurrency(computation.outstandingPenalty)}</span>
+                              </div>
+                            )}
+
+                            <div className="pt-4 mt-2 border-t border-[#E2E8F0] flex justify-between items-center">
+                              <span className="font-bold uppercase tracking-widest text-[10px] text-muted-foreground">Net Proceeds</span>
+                              <span className="font-black text-2xl text-green-600">{formatCurrency(computation.netProceeds)}</span>
+                            </div>
                           </div>
-                       </div>
+                        </div>
+                      )}
 
-                       {computation && (
-                         <div className="space-y-4 pt-4 border-t border-[#E2E8F0]">
-                           <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Itemized Deductions</h3>
-                           <div className="bg-[#FAFAFA] border border-[#E2E8F0] rounded-2xl p-6 space-y-3 shadow-sm">
-                             <div className="flex justify-between items-center text-sm text-muted-foreground">
-                               <span>Service Charge (1% per year)</span>
-                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.serviceCharge)}</span>
-                             </div>
-                             <div className="flex justify-between items-center text-sm text-muted-foreground">
-                               <span>Share Capital (1% retain)</span>
-                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.shareCapital)}</span>
-                             </div>
-                             <div className="flex justify-between items-center text-sm text-muted-foreground">
-                               <span>First Month Amortization</span>
-                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.firstMonthAmortization)}</span>
-                             </div>
-                             <div className="flex justify-between items-center text-sm text-muted-foreground">
-                               <span>First Month Interest</span>
-                               <span className="font-medium text-[#1A1A1A]">{formatCurrency(computation.firstMonthInterest)}</span>
-                             </div>
-                             
-                             {computation.outstandingBalance > 0 && (
-                               <div className="flex justify-between items-center text-sm text-red-500 font-semibold pt-2 border-t border-[#E2E8F0]">
-                                 <span>Outstanding Balance (Renewal)</span>
-                                 <span>- {formatCurrency(computation.outstandingBalance)}</span>
-                               </div>
-                             )}
 
-                             {computation.outstandingPenalty > 0 && (
-                               <div className="flex justify-between items-center text-sm text-red-500 font-semibold pt-1">
-                                 <span>Surcharge Penalty (Double 2%)</span>
-                                 <span>- {formatCurrency(computation.outstandingPenalty)}</span>
-                               </div>
-                             )}
-
-                             <div className="pt-4 mt-2 border-t border-[#E2E8F0] flex justify-between items-center">
-                               <span className="font-bold uppercase tracking-widest text-[10px] text-muted-foreground">Net Proceeds</span>
-                               <span className="font-black text-2xl text-green-600">{formatCurrency(computation.netProceeds)}</span>
-                             </div>
-                           </div>
-                         </div>
-                       )}
-                       
-
-                       <FormField
+                      <FormField
                         control={form.control}
                         name="remarks"
                         render={({ field }) => (
@@ -849,7 +841,7 @@ export function LoanFormSheet({ open, onOpenChange, loan }: LoanFormSheetProps) 
                         let fieldsToValidate: any = [];
                         if (currentStep === 1) fieldsToValidate = ['applicantName', 'membershipType', 'loanType', 'purpose', 'isRenewal', 'renewingLoanId'];
                         if (currentStep === 2) fieldsToValidate = ['amount', 'paymentTerm'];
-                        
+
                         try {
                           const isValid = await form.trigger(fieldsToValidate);
                           if (isValid) {

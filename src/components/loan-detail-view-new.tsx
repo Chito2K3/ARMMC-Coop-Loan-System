@@ -4,14 +4,13 @@ import * as React from 'react';
 import {
   Check,
   ChevronLeft,
+  DollarSign,
   FilePenLine,
   ThumbsDown,
   ThumbsUp,
   Trash2,
   X,
   Calculator,
-  ArrowRight,
-  DollarSign,
   Banknote,
   ClipboardCheck,
   Printer,
@@ -24,13 +23,6 @@ import {
   Timestamp,
   collection,
   writeBatch,
-  Firestore,
-  getDocs,
-  query,
-  orderBy,
-  getDoc,
-  setDoc,
-  where,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -62,7 +54,7 @@ import {
   deleteDocumentNonBlocking,
 } from '@/firebase/non-blocking-updates';
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { getUser, type UserProfile } from '@/firebase/user-service';
+import { getUser, ensureUserDoc, type UserProfile } from '@/firebase/user-service';
 import { toast } from '@/hooks/use-toast';
 import type { Loan, LoanWrite, LoanSerializable, PaymentWrite } from '@/lib/types';
 import { StatusBadge } from './status-badge';
@@ -88,42 +80,29 @@ const generatePaymentSchedule = (loan: Loan, releasedAt: Date): PaymentWrite[] =
 
   for (let i = 0; i < term; i++) {
     const month = i + 1;
-    const interest = beginningBalance * interestRate;
 
     let principalPayment = 0;
-    let totalAmount = 0;
-
     if (month === term) {
       principalPayment = principal - totalPrincipalPaid;
-      totalAmount = principalPayment + interest;
     } else {
-      const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
-      totalAmount = Math.round(exactTotalPayment);
-      principalPayment = totalAmount - interest;
+      principalPayment = Math.round(approximateMonthlyPrincipalPayment);
     }
 
     const dueDate = addMonths(releasedAt, month);
-
-    // Month 1 is deducted from purely net proceeds if term > 1, so it is "paid" upfront implicitly by the coop
-    const isFirstMonthDeducted = month === 1 && term > 1;
 
     paymentSchedule.push({
       loanId: loan.id,
       paymentNumber: month,
       dueDate: Timestamp.fromDate(dueDate),
-      amount: totalAmount,
-      status: isFirstMonthDeducted ? 'paid' : 'pending',
+      amount: principalPayment,
+      status: 'pending',
       penalty: 0,
       penaltyWaived: false,
-      ...(isFirstMonthDeducted && {
-        actualAmountPaid: totalAmount,
-        paymentDate: Timestamp.fromDate(releasedAt),
-      })
     });
 
-    beginningBalance -= principalPayment;
     totalPrincipalPaid += principalPayment;
   }
+
 
   // Handle single payment logic where interest is fully deducted
   if (term === 1 && paymentSchedule.length > 0) {
@@ -253,46 +232,12 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
     setIsSubmitting(true);
     try {
       // Ensure a users/{uid} doc exists so security rules that look up by UID succeed.
-      try {
-        if (user) {
-          const userRef = doc(firestore, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            if (user.email) {
-              const usersRef = collection(firestore, 'users');
-              const emailQ = query(usersRef, where('email', '==', user.email));
-              const emailSnap = await getDocs(emailQ);
-              if (!emailSnap.empty) {
-                const data = emailSnap.docs[0].data();
-                await setDoc(userRef, {
-                  email: data.email || user.email,
-                  name: data.name || user.displayName || '',
-                  role: data.role || 'user',
-                  createdAt: data.createdAt || serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                });
-              } else {
-                await setDoc(userRef, {
-                  email: user.email || '',
-                  name: user.displayName || '',
-                  role: 'user',
-                  createdAt: serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                });
-              }
-            } else {
-              await setDoc(userRef, {
-                email: '',
-                name: user.displayName || '',
-                role: 'user',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              });
-            }
-          }
+      if (user) {
+        try {
+          await ensureUserDoc(firestore, user.uid, user.email, user.displayName);
+        } catch (err) {
+          console.error('Error ensuring users/{uid} doc before release:', err);
         }
-      } catch (err) {
-        console.error('Error ensuring users/{uid} doc before release:', err);
       }
 
       const releasedAtDate = new Date();
@@ -360,7 +305,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         title: 'Loan Deleted',
         description: 'The loan application has been successfully deleted.',
       });
-      router.push('/');
+      handleBackClick();
     } catch (error) {
       console.error('Error deleting loan:', error);
       toast({
@@ -417,11 +362,6 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   };
 
   const handleDenyClick = () => {
-    if (!loan?.committeeMemberChecked) {
-      setRequirementMessage('Credit Committee Member must verify the loan before denial.');
-      setRequirementDialogOpen(true);
-      return;
-    }
     setDenyDialogOpen(true);
   };
 
@@ -503,7 +443,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         <p className="mb-4">
           This loan application could not be found. It might have been deleted.
         </p>
-        <Button onClick={() => router.push('/')}>Go to Dashboard</Button>
+        <Button onClick={handleBackClick}>Go to Dashboard</Button>
       </div>
     );
   }
@@ -517,6 +457,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
   };
 
   const isWorkflowDisabled = ['released', 'fully-paid', 'denied'].includes(loan.status);
+  const isAdmin = userRole === 'admin';
   const isPayrollCheckerRole = userRole === 'payrollChecker';
   const isBookkeeperRole = userRole === 'bookkeeper';
   const isApproverRole = userRole === 'approver' || userRole === 'creditCommitteeOfficer' || userRole === 'creditCommitteeMember' || userRole === 'admin';
@@ -564,7 +505,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             variant="outline"
             className="flex-1 h-8 text-xs border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/60 transition-all"
             onClick={() => setSheetOpen(true)}
-            disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+            disabled={isSubmitting || (!isAdmin && (isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')))}
           >
             <FilePenLine className="h-3 w-3 mr-1.5" />
             Edit
@@ -574,7 +515,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
             variant="outline"
             className="flex-1 h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/5 hover:border-destructive/60 transition-all"
             onClick={() => setDeleteDialogOpen(true)}
-            disabled={isSubmitting || isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')}
+            disabled={isSubmitting || (!isAdmin && (isPayrollCheckerRole || isApproverRole || (isBookkeeperRole && loan.status !== 'pending')))}
           >
             <Trash2 className="h-3 w-3 mr-1.5" />
             Delete
@@ -611,22 +552,23 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
           </div>
 
           <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.payrollChecked && !loan.committeeMemberChecked ? 'bg-indigo-50 border border-indigo-200' : 'bg-muted/50'}`}>
-            <ClipboardCheck className={`h-5 w-5 ${loan.committeeMemberChecked ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <ClipboardCheck className={`h-5 w-5 ${loan.committeeMemberChecked ? 'text-green-500' : loan.status === 'denied' && !loan.committeeMemberChecked ? 'text-red-500' : 'text-muted-foreground'}`} />
             <div className="flex-1">
               <p className="font-medium text-sm">Committee Verification</p>
-              <p className="text-xs text-muted-foreground">{loan.committeeMemberChecked ? 'Verified' : 'Pending verification'}</p>
+              <p className="text-xs text-muted-foreground">{loan.committeeMemberChecked ? 'Verified' : loan.status === 'denied' && !loan.committeeMemberChecked ? 'Denied' : 'Pending verification'}</p>
             </div>
             {loan.committeeMemberChecked && <Check className="h-4 w-4 text-green-500" />}
+            {loan.status === 'denied' && !loan.committeeMemberChecked && <X className="h-4 w-4 text-red-500" />}
           </div>
 
           <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'pending' && loan.committeeMemberChecked ? 'bg-purple-50 border border-purple-200' : 'bg-muted/50'}`}>
-            <ThumbsUp className={`h-5 w-5 ${['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : loan.status === 'denied' ? 'text-red-500' : 'text-muted-foreground'}`} />
+            <ThumbsUp className={`h-5 w-5 ${['approved', 'released', 'fully-paid'].includes(loan.status) ? 'text-green-500' : loan.status === 'denied' && loan.committeeMemberChecked ? 'text-red-500' : 'text-muted-foreground'}`} />
             <div className="flex-1">
               <p className="font-medium text-sm">Officer Approval</p>
-              <p className="text-xs text-muted-foreground">{loan.status === 'approved' ? 'Approved' : loan.status === 'denied' ? 'Denied' : 'Pending approval'}</p>
+              <p className="text-xs text-muted-foreground">{loan.status === 'approved' ? 'Approved' : loan.status === 'denied' && loan.committeeMemberChecked ? 'Denied' : 'Pending approval'}</p>
             </div>
             {['approved', 'released', 'fully-paid'].includes(loan.status) && <Check className="h-4 w-4 text-green-500" />}
-            {loan.status === 'denied' && <X className="h-4 w-4 text-red-500" />}
+            {loan.status === 'denied' && loan.committeeMemberChecked && <X className="h-4 w-4 text-red-500" />}
           </div>
 
           <div className={`flex items-center gap-3 p-3 rounded-lg ${loan.status === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-muted/50'}`}>
@@ -693,13 +635,22 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
                 size="sm"
                 onClick={handleVerifyCommitteeMemberClick}
                 disabled={isSubmitting || !isCommitteeMemberRole}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              >
+                <ThumbsUp className="mr-2 h-4 w-4" /> Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleDenyClick}
+                disabled={isSubmitting || !isCommitteeMemberRole}
                 className="flex-1"
               >
-                <ClipboardCheck className="mr-2 h-4 w-4" /> Verify Application
+                <ThumbsDown className="mr-2 h-4 w-4" /> Deny
               </Button>
             </div>
             {!isCommitteeMemberRole && (
-              <p className="text-xs text-muted-foreground">Only Credit Committee Members can verify</p>
+              <p className="text-xs text-muted-foreground">Only Credit Committee Members can approve/deny at this stage</p>
             )}
           </div>
         )}
@@ -863,7 +814,7 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         </div>
       </div>
 
-      {isReleasedOrPaid && loan.releasedAt && (
+      {isReleasedOrPaid && loan.releasedAt && !isAdmin && (
         <div className="mb-6">
           <CollectionSchedule loan={loan} userRole={userRole} />
         </div>
@@ -889,36 +840,42 @@ export function LoanDetailView({ loanId, onBack }: LoanDetailViewProps) {
         );
 
         return isReleasedOrPaid ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            {basicInfoCard}
-            {managementCard}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              {basicInfoCard}
+              {managementCard}
+            </div>
+            <div className="space-y-6">
+              {loanHistoryCard}
+              {loanActionsCard}
+              <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
+            </div>
           </div>
-          <div className="space-y-6">
-            {loanHistoryCard}
-            {loanActionsCard}
-            <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="space-y-6">
+              {basicInfoCard}
+              {managementCard}
+              {loanActionsCard}
+            </div>
+            <div className="space-y-6">
+              {workflowCard}
+              {currentActionCard}
+            </div>
+            <div className="space-y-6">
+              {verificationCard}
+              {loanHistoryCard}
+              <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-6">
-            {basicInfoCard}
-            {managementCard}
-            {loanActionsCard}
-          </div>
-          <div className="space-y-6">
-            {workflowCard}
-            {currentActionCard}
-          </div>
-          <div className="space-y-6">
-            {verificationCard}
-            {loanHistoryCard}
-            <ExistingLoansCheck applicantName={loan.applicantName} currentLoanId={loan.id} />
-          </div>
-        </div>
         );
       })()}
+
+      {isReleasedOrPaid && loan.releasedAt && isAdmin && (
+        <div className="mt-6 mb-6">
+          <CollectionSchedule loan={loan} userRole={userRole} />
+        </div>
+      )}
 
       <LoanFormSheet
         open={isSheetOpen}

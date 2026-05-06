@@ -77,7 +77,7 @@ export default function AdminSettingsPage() {
     };
 
     fetchSettings();
-  }, [firestore]);
+  }, [firestore, user]);
 
 
   const handleAddType = async () => {

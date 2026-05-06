@@ -94,7 +94,7 @@ export function DashboardClient({ showApprovalPanel = false, onShowApprovalPanel
     if (showApprovalPanel || showSalaryInputPanel || showPastDuePanel || showReleasePanel) {
       setSelectedLoanId(null);
     }
-  }, [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel]);
+  }, [showApprovalPanel, showSalaryInputPanel, showPastDuePanel, showReleasePanel, setSelectedLoanId]);
 
   const loansQuery = useMemoFirebase(() => {
     if (!firestore) return null;

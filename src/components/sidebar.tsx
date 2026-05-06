@@ -14,6 +14,63 @@ import type { Loan } from '@/lib/types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+// NavItem extracted as a standalone component to avoid re-creation on every render
+interface NavItemProps {
+  href?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  badge?: number;
+  onClick?: () => void;
+  isExpanded: boolean;
+}
+
+function NavItem({ href, icon: Icon, label, badge, onClick, isExpanded }: NavItemProps) {
+  const content = (
+    <Button 
+      variant="ghost" 
+      className={cn(
+        "w-full transition-all duration-200",
+        isExpanded ? "justify-start px-4" : "justify-center px-0 h-10 w-10 mx-auto"
+      )}
+      onClick={onClick}
+    >
+      <Icon className={cn("h-5 w-5", isExpanded ? "mr-3" : "mr-0")} />
+      {isExpanded && <span className="truncate">{label}</span>}
+      {isExpanded && (badge ?? 0) > 0 && (
+        <span className="ml-auto bg-primary text-primary-foreground text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[1.2rem] text-center">
+          {badge}
+        </span>
+      )}
+    </Button>
+  );
+
+  if (onClick && !href) {
+    return isExpanded ? content : (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{content}</TooltipTrigger>
+          <TooltipContent side="right">
+            {label} {(badge ?? 0) > 0 && `(${badge})`}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <Link href={href || '#'} className="w-full block">
+      {isExpanded ? content : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>{content}</TooltipTrigger>
+            <TooltipContent side="right">{label}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </Link>
+  );
+}
+
 interface SidebarProps {
   isExpanded: boolean;
   onToggle: () => void;
@@ -86,53 +143,6 @@ export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
     }
   };
 
-  const NavItem = ({ href, icon: Icon, label, badge, onClick }: any) => {
-    const content = (
-      <Button 
-        variant="ghost" 
-        className={cn(
-          "w-full transition-all duration-200",
-          isExpanded ? "justify-start px-4" : "justify-center px-0 h-10 w-10 mx-auto"
-        )}
-        onClick={onClick}
-      >
-        <Icon className={cn("h-5 w-5", isExpanded ? "mr-3" : "mr-0")} />
-        {isExpanded && <span className="truncate">{label}</span>}
-        {isExpanded && badge > 0 && (
-          <span className="ml-auto bg-primary text-primary-foreground text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[1.2rem] text-center">
-            {badge}
-          </span>
-        )}
-      </Button>
-    );
-
-    if (onClick && !href) {
-      return isExpanded ? content : (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>{content}</TooltipTrigger>
-            <TooltipContent side="right">
-              {label} {badge > 0 && `(${badge})`}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-
-    return (
-      <Link href={href || '#'} className="w-full block">
-        {isExpanded ? content : (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>{content}</TooltipTrigger>
-              <TooltipContent side="right">{label}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </Link>
-    );
-  };
-
   return (
     <div className={cn(
       "hidden lg:flex flex-col bg-white border-r border-[#E2E8F0] h-screen fixed left-0 top-0 transition-all duration-300 ease-in-out z-40",
@@ -180,12 +190,12 @@ export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
       <div className="flex-1 px-3 py-6 space-y-4 overflow-y-auto overflow-x-hidden">
         <div className="space-y-1">
           {userRole === 'admin' && (
-            <NavItem href="/admin" icon={Home} label="Admin Dashboard" onClick={() => setSelectedLoanId(null)} />
+            <NavItem href="/admin" icon={Home} label="Admin Dashboard" isExpanded={isExpanded} onClick={() => setSelectedLoanId(null)} />
           )}
-          <NavItem href="/" icon={Home} label="Dashboard" onClick={() => setSelectedLoanId(null)} />
-          <NavItem href="/reports" icon={BarChart3} label="Reports" />
+          <NavItem href="/" icon={Home} label="Dashboard" isExpanded={isExpanded} onClick={() => setSelectedLoanId(null)} />
+          <NavItem href="/reports" icon={BarChart3} label="Reports" isExpanded={isExpanded} />
           {userRole === 'admin' && (
-            <NavItem href="/admin/settings" icon={Settings} label="Settings" />
+            <NavItem href="/admin/settings" icon={Settings} label="Settings" isExpanded={isExpanded} />
           )}
         </div>
 
@@ -196,6 +206,7 @@ export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
               icon={ClipboardCheck} 
               label="For Approval" 
               badge={approvalCount} 
+              isExpanded={isExpanded}
               onClick={() => setShowApprovalPanel(true)} 
             />
           )}
@@ -204,6 +215,7 @@ export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
               icon={DollarSign} 
               label="Input Salary" 
               badge={salaryCount} 
+              isExpanded={isExpanded}
               onClick={() => setShowSalaryInputPanel(true)} 
             />
           )}
@@ -212,6 +224,7 @@ export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
               icon={Banknote} 
               label="For Releasing" 
               badge={releaseCount} 
+              isExpanded={isExpanded}
               onClick={() => setShowReleasePanel(true)} 
             />
           )}
@@ -220,7 +233,7 @@ export function Sidebar({ isExpanded, onToggle }: SidebarProps) {
 
       {/* Logout */}
       <div className="p-3 border-t border-[#E2E8F0]">
-        <NavItem icon={LogOut} label="Logout" onClick={handleLogout} />
+        <NavItem icon={LogOut} label="Logout" isExpanded={isExpanded} onClick={handleLogout} />
       </div>
     </div>
   );

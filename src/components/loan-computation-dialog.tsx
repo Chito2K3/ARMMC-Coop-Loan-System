@@ -50,7 +50,7 @@ export function LoanComputationDialog({
   userRole,
 }: LoanComputationDialogProps) {
   const router = useRouter();
-  
+
   const computation = useMemo(() => {
     if (!loan || !loan.paymentTerm || loan.paymentTerm <= 0 || !loan.amount)
       return null;
@@ -69,8 +69,6 @@ export function LoanComputationDialog({
 
     let beginningBalance = principal;
     let totalInterest = 0;
-    
-    // We drop the simple Math.floor(principal/term) because we will calculate principal dynamically per month based on a rounded total payment.
     const approximateMonthlyPrincipalPayment = principal / term;
     let totalPrincipalPaid = 0;
 
@@ -79,22 +77,13 @@ export function LoanComputationDialog({
       totalInterest += interest;
 
       let principalPayment = 0;
-      let totalMonthlyPayment = 0;
 
       if (month === term) {
-        // Last month: The principal payment is exactly whatever balance is remaining. 
         principalPayment = principal - totalPrincipalPaid;
-        totalMonthlyPayment = principalPayment + interest;
       } else {
-        // Normal month: Total Payment must be a clean, whole Peso.
-        // Get exact theoretically perfect total, then round it to nearest integer.
-        const exactTotalPayment = approximateMonthlyPrincipalPayment + interest;
-        totalMonthlyPayment = Math.round(exactTotalPayment);
-        
-        // Principal is whatever is left over after satisfying the exact interest portion
-        principalPayment = totalMonthlyPayment - interest;
+        principalPayment = Math.round(approximateMonthlyPrincipalPayment);
       }
-      
+
       const endingBalance = beginningBalance - principalPayment;
 
       schedule.push({
@@ -108,47 +97,33 @@ export function LoanComputationDialog({
       beginningBalance = endingBalance;
       totalPrincipalPaid += principalPayment;
     }
-    
-    // Average out the first month amortization to show in the UI summary
-    const monthlyAmortizationPrincipal = Math.round(schedule[0]?.principal * 100) / 100 || 0;
 
-    // Fees calculation
+    const monthlyAmortizationPrincipal = schedule[0]?.principal || 0;
+
     const loanTermInYears = term / 12;
-    const serviceCharge = principal * 0.01 * loanTermInYears; 
+    const serviceCharge = principal * 0.06 * loanTermInYears;
     const shareCapital = principal * 0.01;
 
-    // First month deductions
-    const firstMonthInterest = schedule[0].interest;
+    // Round total interest DOWN to nearest whole peso to match manual ledger
+    totalInterest = Math.floor(totalInterest);
 
-    // For single-payment loans, the amortization is not deducted from proceeds
-    const firstMonthAmortizationDeduction = term === 1 ? 0 : monthlyAmortizationPrincipal;
-    
-    // Total deductions
     const outstandingBalance = loan.outstandingBalanceAtRenewal || 0;
     const totalDeductions =
       serviceCharge +
       shareCapital +
-      firstMonthAmortizationDeduction +
-      firstMonthInterest +
+      totalInterest +
       outstandingBalance;
 
     const netProceeds = principal - totalDeductions;
-    
-    // For 1-month term, interest is deducted upfront, so it's not paid back in amortization.
-    if (term === 1) {
-      schedule[0].interest = 0;
-    }
 
     return {
       principal,
       term,
       monthlyAmortization: monthlyAmortizationPrincipal,
       totalInterest,
-      schedule: term > 1 ? schedule.slice(1) : schedule,
+      schedule: schedule,
       serviceCharge,
       shareCapital,
-      firstMonthAmortization: firstMonthAmortizationDeduction,
-      firstMonthInterest,
       totalDeductions,
       netProceeds,
       loanTermInYears,
@@ -157,7 +132,7 @@ export function LoanComputationDialog({
   }, [loan]);
 
   if (!computation) return null;
-  
+
   const handleRelease = async () => {
     try {
       await onRelease();
@@ -240,9 +215,9 @@ export function LoanComputationDialog({
               Loan Deductions
             </h3>
             <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
-               <div className="flex justify-between text-base">
+              <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
-                  Service Charge (1% per year)
+                  Service Charge (6% per year)
                 </span>
                 <span className="font-medium">
                   {formatCurrency(computation.serviceCharge)}
@@ -255,26 +230,15 @@ export function LoanComputationDialog({
                   {formatCurrency(computation.shareCapital)}
                 </span>
               </div>
-              
+
               <div className="flex justify-between text-base">
                 <span className="text-muted-foreground">
-                  First Month Interest (1.5%)
+                  Interest (1.5% diminishing per month)
                 </span>
                 <span className="font-medium">
-                  {formatCurrency(computation.firstMonthInterest)}
+                  {formatCurrency(computation.totalInterest)}
                 </span>
               </div>
-
-              {computation.term > 1 && (
-                <div className="flex justify-between text-base">
-                  <span className="text-muted-foreground">
-                    First Month Principal (Deducted upfront)
-                  </span>
-                  <span className="font-medium">
-                    {formatCurrency(computation.monthlyAmortization)}
-                  </span>
-                </div>
-              )}
 
               {computation.outstandingBalance > 0 && (
                 <div className="flex justify-between text-base pt-2 border-t border-dashed border-red-500/20">
@@ -305,7 +269,7 @@ export function LoanComputationDialog({
                     <TableHead className="text-right text-sm">Beginning Balance</TableHead>
                     <TableHead className="text-right text-sm">Monthly Interest</TableHead>
                     <TableHead className="text-right text-sm">Principal Payment</TableHead>
-                    <TableHead className="text-right text-sm font-bold text-primary">Total Monthly Payment</TableHead>
+                    <TableHead className="text-right text-sm font-bold text-primary">Monthly Amortization</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -322,7 +286,7 @@ export function LoanComputationDialog({
                         {formatCurrency(row.principal)}
                       </TableCell>
                       <TableCell className="text-right text-sm font-bold text-primary">
-                        {formatCurrency(row.principal + row.interest)}
+                        {formatCurrency(row.principal)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -332,7 +296,7 @@ export function LoanComputationDialog({
                     <TableCell colSpan={4} className="text-right font-medium">Total</TableCell>
                     <TableCell className="text-right font-bold text-primary">
                       {formatCurrency(
-                        computation.schedule.reduce((total, row) => total + row.principal + row.interest, 0)
+                        computation.schedule.reduce((total, row) => total + row.principal, 0)
                       )}
                     </TableCell>
                   </TableRow>
@@ -343,7 +307,7 @@ export function LoanComputationDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between flex-row-reverse sm:flex-row pt-4">
-           <Button variant="outline" onClick={() => onOpenChange(false)} className="text-sm px-4 py-1 h-auto">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="text-sm px-4 py-1 h-auto">
             Close
           </Button>
           {loan.status === 'approved' && (

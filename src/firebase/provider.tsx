@@ -5,7 +5,7 @@ import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
-import { doc, getDoc, setDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { ensureUserDoc } from '@/firebase/user-service';
 
 interface FirebaseProviderProps {
     children: ReactNode;
@@ -84,55 +84,16 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                     setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
 
                     // Ensure there is a `users/{uid}` document for security rule checks.
-                    // If a user document exists keyed by email only, copy it to the UID-based doc.
-                    (async () => {
-                        try {
-                            if (!firebaseUser || !firestore) return;
-                            const uid = firebaseUser.uid;
-                            const userRef = doc(firestore, 'users', uid);
-                            const userSnap = await getDoc(userRef);
-                            if (userSnap.exists()) return; // already present
-
-                            // Try to find by email
-                            const email = firebaseUser.email || '';
-                            if (!email) {
-                                // create a minimal doc so rules that lookup by uid succeed
-                                await setDoc(userRef, {
-                                    email: '',
-                                    name: firebaseUser.displayName || '',
-                                    role: 'user',
-                                    createdAt: serverTimestamp(),
-                                    updatedAt: serverTimestamp(),
-                                });
-                                return;
-                            }
-
-                            const usersRef = collection(firestore, 'users');
-                            const q = query(usersRef, where('email', '==', email));
-                            const qs = await getDocs(q);
-                            if (!qs.empty) {
-                                const data = qs.docs[0].data();
-                                await setDoc(userRef, {
-                                    email: data.email || email,
-                                    name: data.name || firebaseUser.displayName || '',
-                                    role: data.role || 'user',
-                                    createdAt: data.createdAt || serverTimestamp(),
-                                    updatedAt: serverTimestamp(),
-                                });
-                            } else {
-                                // No existing record by email — create minimal user doc keyed by uid
-                                await setDoc(userRef, {
-                                    email,
-                                    name: firebaseUser.displayName || '',
-                                    role: 'user',
-                                    createdAt: serverTimestamp(),
-                                    updatedAt: serverTimestamp(),
-                                });
-                            }
-                        } catch (err) {
+                    if (firebaseUser && firestore) {
+                        ensureUserDoc(
+                            firestore,
+                            firebaseUser.uid,
+                            firebaseUser.email,
+                            firebaseUser.displayName
+                        ).catch(err => {
                             console.error('Error ensuring user doc for UID:', err);
-                        }
-                    })();
+                        });
+                    }
             },
             (error) => { // Auth listener error
                 console.error("FirebaseProvider: onAuthStateChanged error:", (error as any).code || 'unknown', error.message || 'No message');
