@@ -153,7 +153,8 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   }, [firestore, loan, payments, isSurchargePending, isLoading]);
 
   const handleSettleSurcharge = async () => {
-    if (!firestore) return;
+    if (!firestore || !isAuditDialogOpen) return; // Prevent double clicks
+    
     const amount = Number(auditPaymentAmount);
     if (amount <= 0) {
       toast({ title: 'Invalid Amount', description: 'Please enter a valid amount.', variant: 'destructive' });
@@ -302,8 +303,10 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
   };
 
   const handleEditAmountSave = async () => {
+    if (!editingPaymentId) return; // Silent return if dialog is already closing/submitting
+
     const amount = Number(editAmount);
-    if (!editingPaymentId || amount <= 0) {
+    if (amount <= 0) {
       toast({
         title: 'Invalid Amount',
         description: 'Please enter a valid amount.',
@@ -321,6 +324,9 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
       });
       return;
     }
+
+    // Track whether this payment was already paid before editing (re-edit vs first-time)
+    const wasAlreadyPaid = payment.status === 'paid';
 
     try {
       const paymentRef = doc(firestore, 'loans', loan.id, 'payments', editingPaymentId);
@@ -368,7 +374,9 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
           description: 'Congratulations! This loan has been fully paid.',
           className: 'bg-green-100 text-green-800 border-green-200'
         });
-      } else if (allPaid && (isPending || effectiveShortfall > 0)) {
+      } else if (allPaid && (isPending || effectiveShortfall > 0) && !wasAlreadyPaid) {
+        // Only show this notice when the LAST payment is newly marked paid,
+        // not when re-editing an already-paid payment's amount.
         toast({
           title: 'Payments Complete, Audit Pending',
           description: 'All monthly schedules are paid, but a shortfall/surcharge must be settled.',
@@ -743,7 +751,7 @@ export function CollectionSchedule({ loan, userRole }: CollectionScheduleProps) 
           setAuditPaymentDate(new Date());
         }
       }}>
-        <DialogContent>
+        <DialogContent onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Settle Surcharge Offset</DialogTitle>
             <DialogDescription>
